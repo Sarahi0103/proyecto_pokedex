@@ -2,7 +2,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
-import PushNotificationToggle from '../components/PushNotificationToggle.vue'
 
 const router = useRouter()
 const q = ref('')
@@ -111,9 +110,6 @@ onMounted(load)
         <p class="header-subtitle">¡Atrápalos a todos! Explora y colecciona</p>
       </div>
     </div>
-
-    <!-- Push Notifications Toggle -->
-    <PushNotificationToggle />
 
     <!-- Panel de búsqueda y filtros -->
     <div class="search-panel">

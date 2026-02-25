@@ -52,6 +52,11 @@ export function usePushNotifications() {
       publicKey.value = response.publicKey;
       return response.publicKey;
     } catch (err) {
+      // Si VAPID keys no están configuradas, no es un error crítico
+      if (err.message && err.message.includes('VAPID keys not configured')) {
+        console.warn('⚠️ VAPID keys no configuradas. Las notificaciones push estarán deshabilitadas.');
+        return null;
+      }
       console.error('Error obteniendo VAPID public key:', err);
       throw err;
     }
@@ -92,7 +97,12 @@ export function usePushNotifications() {
 
       // Obtener public key
       if (!publicKey.value) {
-        await getPublicKey();
+        const key = await getPublicKey();
+        if (!key) {
+          // VAPID keys no configuradas, no hacer nada
+          console.info('ℹ️ Push notifications no disponibles (VAPID keys no configuradas)');
+          return null;
+        }
       }
 
       // Obtener service worker registration
