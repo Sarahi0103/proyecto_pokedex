@@ -1,27 +1,12 @@
 // Service Worker - Pokedex PWA
-const CACHE_NAME = 'pokedex-v15';
-const CACHE_DYNAMIC_NAME = 'pokedex-dynamic-v15';
-const CACHE_IMAGES_NAME = 'pokedex-images-v15';
+const CACHE_NAME = 'pokedex-v16';
+const CACHE_DYNAMIC_NAME = 'pokedex-dynamic-v16';
+const CACHE_IMAGES_NAME = 'pokedex-images-v16';
 
-// APP SHELL - Recursos estáticos necesarios para que la app funcione offline
+// APP SHELL - Solo archivos que existen después del build
 const APP_SHELL = [
   '/',
-  '/index.html',
-  '/src/main.js',
-  '/src/App.vue',
-  '/src/styles.css',
-  '/src/store.js',
-  '/src/api.js',
-  '/src/router/index.js',
-  '/src/views/Home.vue',
-  '/src/views/Login.vue',
-  '/src/views/Register.vue',
-  '/src/views/Favorites.vue',
-  '/src/views/Teams.vue',
-  '/src/views/Friends.vue',
-  '/src/views/Battle.vue',
-  '/src/views/PokemonDetail.vue',
-  '/src/views/AuthCallback.vue'
+  '/index.html'
 ];
 
 // INSTALL - Cachear el APP SHELL
@@ -32,7 +17,12 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         // console.log('[SW] Cacheando APP SHELL');
-        return cache.addAll(APP_SHELL);
+        // Cachear solo archivos básicos, el resto se cachea dinámicamente
+        return cache.addAll(APP_SHELL).catch(err => {
+          console.warn('[SW] Error cacheando APP_SHELL (ignorado):', err);
+          // No fallar si algunos archivos no se pueden cachear
+          return Promise.resolve();
+        });
       })
       .then(() => {
         // Activar el nuevo SW automáticamente sin esperar
