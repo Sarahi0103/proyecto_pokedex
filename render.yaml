@@ -1,0 +1,84 @@
+# Configuración para Render.com
+# Este archivo despliega automáticamente Frontend, Backend y PostgreSQL
+
+services:
+  # ================================
+  # BACKEND - API Node.js + Socket.io
+  # ================================
+  - type: web
+    name: pokedex-backend
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: cd BE && npm install
+    startCommand: cd BE && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: POKEAPI_BASE
+        value: https://pokeapi.co/api/v2
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pokedex-db
+          property: connectionString
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: pokedex-frontend
+          property: host
+      # Google OAuth - Debes configurarlas manualmente en Render Dashboard
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      # VAPID Keys para Push Notifications - Generar con: npm run generate-vapid
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+    healthCheckPath: /api/health
+
+  # ================================
+  # FRONTEND - Vue 3 + Vite
+  # ================================
+  - type: web
+    name: pokedex-frontend
+    runtime: static
+    buildCommand: cd pokedex && npm install && npm run build
+    staticPublishPath: ./pokedex/dist
+    envVars:
+      - key: VITE_API_BASE
+        fromService:
+          type: web
+          name: pokedex-backend
+          property: host
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+# ================================
+# BASE DE DATOS - PostgreSQL
+# ================================
+databases:
+  - name: pokedex-db
+    databaseName: pokedex
+    plan: free
+    postgresMajorVersion: '16'

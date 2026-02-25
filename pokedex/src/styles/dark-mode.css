@@ -1,0 +1,295 @@
+/* Dark Mode Variables */
+
+:root[data-theme="dark"],
+:root.dark-mode {
+  /* Colores Primarios - Invertidos para Dark Mode */
+  --red: #ff6b6b;
+  --red-dark: #ff5252;
+  --blue: #4db8ff;
+  --blue-light: #80d4ff;
+  --green: #51cf66;
+  --yellow: #ffd43b;
+  --purple: #da77f2;
+  --pink: #ff8cc3;
+
+  /* Background y Surface */
+  --bg: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --card-bg: #0d1117;
+  --surface-primary: #161b22;
+  --surface-secondary: #21262d;
+
+  /* Texto */
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-tertiary: #6e7681;
+  --text-muted: #484f58;
+
+  /* Bordes */
+  --border: #30363d;
+  --border-light: #21262d;
+  --border-dark: #444c56;
+
+  /* Estado de Forma */
+  --success: #3fb950;
+  --warning: #d29922;
+  --error: #f85149;
+  --info: #58a6ff;
+
+  /* Escala de Grises */
+  --gray-50: #010409;
+  --gray-100: #0d1117;
+  --gray-200: #161b22;
+  --gray-300: #21262d;
+  --gray-400: #30363d;
+  --gray-500: #444c56;
+  --gray-600: #6e7681;
+  --gray-700: #8b949e;
+  --gray-800: #c9d1d9;
+  --gray-900: #e6edf3;
+
+  /* Sombras - Más sutiles para dark */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.6), 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.7), 0 10px 10px rgba(0, 0, 0, 0.3);
+
+  /* Acentos */
+  --accent-primary: #4db8ff;
+  --accent-secondary: #51cf66;
+  --accent-tertiary: #ffd43b;
+
+  /* Backdrop */
+  --backdrop: rgba(13, 17, 23, 0.9);
+  --modal-bg: rgba(13, 17, 23, 0.95);
+
+  /* Gradientes */
+  --gradient-primary: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+  --gradient-secondary: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+  --gradient-accent: linear-gradient(135deg, #4db8ff 0%, #51cf66 100%);
+}
+
+/* Estilos específicos para dark mode */
+:root[data-theme="dark"],
+:root.dark-mode {
+  color-scheme: dark;
+}
+
+/* Link colors en dark mode */
+:root[data-theme="dark"] a,
+:root.dark-mode a {
+  color: --blue;
+}
+
+:root[data-theme="dark"] a:visited,
+:root.dark-mode a:visited {
+  color: var(--purple);
+}
+
+/* Input styles para dark mode */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select,
+:root.dark-mode input,
+:root.dark-mode textarea,
+:root.dark-mode select {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] input:focus,
+:root[data-theme="dark"] textarea:focus,
+:root[data-theme="dark"] select:focus,
+:root.dark-mode input:focus,
+:root.dark-mode textarea:focus,
+:root.dark-mode select:focus {
+  background-color: var(--surface-primary);
+  border-color: var(--blue);
+}
+
+/* Placeholder text */
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder,
+:root.dark-mode input::placeholder,
+:root.dark-mode textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Code blocks */
+:root[data-theme="dark"] code,
+:root[data-theme="dark"] pre,
+:root.dark-mode code,
+:root.dark-mode pre {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+/* Selection */
+:root[data-theme="dark"]::selection,
+:root.dark-mode::selection {
+  background-color: var(--blue);
+  color: var(--bg);
+}
+
+/* Scrollbar - custom */
+:root[data-theme="dark"]::-webkit-scrollbar,
+:root.dark-mode::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+:root[data-theme="dark"]::-webkit-scrollbar-track,
+:root.dark-mode::-webkit-scrollbar-track {
+  background: var(--surface-primary);
+}
+
+:root[data-theme="dark"]::-webkit-scrollbar-thumb,
+:root.dark-mode::-webkit-scrollbar-thumb {
+  background: var(--gray-500);
+  border-radius: 4px;
+}
+
+:root[data-theme="dark"]::-webkit-scrollbar-thumb:hover,
+:root.dark-mode::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-600);
+}
+
+/* Card styling */
+:root[data-theme="dark"] .card,
+:root.dark-mode .card {
+  background-color: var(--surface-primary);
+  border-color: var(--border);
+}
+
+/* Button styling */
+:root[data-theme="dark"] .btn,
+:root.dark-mode .btn {
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .btn-primary,
+:root.dark-mode .btn-primary {
+  background-color: var(--blue);
+  color: var(--bg);
+}
+
+:root[data-theme="dark"] .btn-primary:hover,
+:root.dark-mode .btn-primary:hover {
+  background-color: var(--blue-light);
+}
+
+:root[data-theme="dark"] .btn-accent,
+:root.dark-mode .btn-accent {
+  background-color: var(--yellow);
+  color: var(--bg);
+}
+
+:root[data-theme="dark"] .btn-accent:hover,
+:root.dark-mode .btn-accent:hover {
+  background-color: #ffc107;
+}
+
+/* Error/Success messages */
+:root[data-theme="dark"] .error-message,
+:root.dark-mode .error-message {
+  background-color: rgba(248, 81, 73, 0.15);
+  color: var(--error);
+  border-left-color: var(--error);
+}
+
+:root[data-theme="dark"] .success-message,
+:root.dark-mode .success-message {
+  background-color: rgba(63, 185, 80, 0.15);
+  color: var(--success);
+  border-left-color: var(--success);
+}
+
+/* Validation errors */
+:root[data-theme="dark"] .validation-icon,
+:root.dark-mode .validation-icon {
+  color: var(--text-secondary);
+}
+
+:root[data-theme="dark"] .validation-icon.valid,
+:root.dark-mode .validation-icon.valid {
+  color: var(--success);
+}
+
+:root[data-theme="dark"] .validation-icon.invalid,
+:root.dark-mode .validation-icon.invalid {
+  color: var(--error);
+}
+
+/* Header/Navigation */
+:root[data-theme="dark"] nav,
+:root[data-theme="dark"] header,
+:root.dark-mode nav,
+:root.dark-mode header {
+  background-color: var(--surface-secondary);
+  border-bottom-color: var(--border);
+}
+
+/* Modal/Dialog */
+:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .dialog,
+:root.dark-mode .modal,
+:root.dark-mode .dialog {
+  background-color: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+/* Table styles */
+:root[data-theme="dark"] table,
+:root.dark-mode table {
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] th,
+:root.dark-mode th {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] td,
+:root.dark-mode td {
+  border-color: var(--border);
+}
+
+/* Focus outline */
+:root[data-theme="dark"] *:focus-visible,
+:root.dark-mode *:focus-visible {
+  outline-color: var(--blue);
+}
+
+/* Loading spinner */
+:root[data-theme="dark"] .loading-spinner,
+:root.dark-mode .loading-spinner {
+  border-color: rgba(77, 184, 255, 0.3);
+  border-top-color: var(--blue);
+}
+
+/* Badge/Tag */
+:root[data-theme="dark"] .badge,
+:root[data-theme="dark"] .tag,
+:root.dark-mode .badge,
+:root.dark-mode .tag {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+/* Transition smooth para cambio de tema */
+:root,
+:root * {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Evitar transiciones en load */
+:root.no-transition,
+:root.no-transition * {
+  transition: none !important;
+}

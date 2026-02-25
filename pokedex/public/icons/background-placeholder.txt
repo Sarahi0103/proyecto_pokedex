@@ -1,0 +1,1 @@
+/* Nota: Guarda la imagen de Pokémon como background.jpg en esta carpeta */

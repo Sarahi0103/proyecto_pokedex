@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limpiar Cache - Pokedex PWA</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    
+    p {
+      color: #666;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    button {
+      padding: 15px 30px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-danger {
+      background: #e74c3c;
+      color: white;
+    }
+    
+    .btn-success {
+      background: #27ae60;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: #95a5a6;
+      color: white;
+    }
+    
+    #status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      display: none;
+    }
+    
+    #status.show {
+      display: block;
+    }
+    
+    #status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    #status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    #status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    
+    .info-box {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+    
+    .info-box h3 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+    
+    .info-box ul {
+      margin-left: 20px;
+      color: #666;
+    }
+    
+    .info-box li {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Limpiar Cache del Service Worker</h1>
+    <p>Esta herramienta te ayudará a limpiar completamente el cache y el Service Worker de la aplicación Pokedex PWA.</p>
+    
+    <div class="button-group">
+      <button class="btn-primary" onclick="clearAllCaches()">
+        🗑️ Limpiar Todo el Cache
+      </button>
+      
+      <button class="btn-danger" onclick="unregisterServiceWorker()">
+        ❌ Desregistrar Service Worker
+      </button>
+      
+      <button class="btn-success" onclick="clearAndReload()">
+        🔄 Limpiar y Recargar App
+      </button>
+      
+      <button class="btn-secondary" onclick="showCacheInfo()">
+        ℹ️ Ver Información de Cache
+      </button>
+    </div>
+    
+    <div id="status"></div>
+    
+    <div class="info-box">
+      <h3>📋 Instrucciones:</h3>
+      <ul>
+        <li><strong>Limpiar Todo el Cache:</strong> Elimina todos los archivos cacheados</li>
+        <li><strong>Desregistrar SW:</strong> Elimina el Service Worker registrado</li>
+        <li><strong>Limpiar y Recargar:</strong> Hace todo y recarga la app (recomendado)</li>
+        <li><strong>Ver Información:</strong> Muestra qué está cacheado actualmente</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    function showStatus(message, type = 'info') {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = `show ${type}`;
+      
+      setTimeout(() => {
+        status.classList.remove('show');
+      }, 5000);
+    }
+
+    async function clearAllCaches() {
+      try {
+        const cacheNames = await caches.keys();
+        
+        if (cacheNames.length === 0) {
+          showStatus('✅ No hay caches para eliminar', 'info');
+          return;
+        }
+        
+        await Promise.all(
+          cacheNames.map(cacheName => caches.delete(cacheName))
+        );
+        
+        showStatus(`✅ ${cacheNames.length} cache(s) eliminado(s) exitosamente: ${cacheNames.join(', ')}`, 'success');
+      } catch (error) {
+        showStatus('❌ Error al limpiar caches: ' + error.message, 'error');
+      }
+    }
+
+    async function unregisterServiceWorker() {
+      try {
+        if (!navigator.serviceWorker) {
+          showStatus('ℹ️ Service Worker no está disponible en este navegador', 'info');
+          return;
+        }
+        
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        
+        if (registrations.length === 0) {
+          showStatus('ℹ️ No hay Service Workers registrados', 'info');
+          return;
+        }
+        
+        await Promise.all(
+          registrations.map(registration => registration.unregister())
+        );
+        
+        showStatus(`✅ ${registrations.length} Service Worker(s) desregistrado(s)`, 'success');
+      } catch (error) {
+        showStatus('❌ Error al desregistrar Service Worker: ' + error.message, 'error');
+      }
+    }
+
+    async function clearAndReload() {
+      try {
+        showStatus('🔄 Limpiando todo...', 'info');
+        
+        // Limpiar caches
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames.map(cacheName => caches.delete(cacheName))
+        );
+        
+        // Desregistrar Service Workers
+        if (navigator.serviceWorker) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(
+            registrations.map(registration => registration.unregister())
+          );
+        }
+        
+        showStatus('✅ Todo limpio! Redirigiendo a la app...', 'success');
+        
+        // Esperar 1 segundo y redirigir
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1000);
+      } catch (error) {
+        showStatus('❌ Error: ' + error.message, 'error');
+      }
+    }
+
+    async function showCacheInfo() {
+      try {
+        const cacheNames = await caches.keys();
+        
+        if (cacheNames.length === 0) {
+          showStatus('ℹ️ No hay caches almacenados', 'info');
+          return;
+        }
+        
+        let info = `📦 Caches encontrados (${cacheNames.length}):\n\n`;
+        
+        for (const cacheName of cacheNames) {
+          const cache = await caches.open(cacheName);
+          const keys = await cache.keys();
+          info += `\n• ${cacheName} (${keys.length} archivos)`;
+        }
+        
+        // Información de Service Worker
+        if (navigator.serviceWorker) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          info += `\n\n⚙️ Service Workers: ${registrations.length} registrado(s)`;
+        }
+        
+        showStatus(info, 'info');
+      } catch (error) {
+        showStatus('❌ Error al obtener información: ' + error.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
