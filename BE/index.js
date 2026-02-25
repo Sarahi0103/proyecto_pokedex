@@ -1237,6 +1237,8 @@ app.get('/api/debug/push-status', authMiddleware, async (req, res) => {
     
     const statusColumnExists = statusCheck.rows[0].exists;
     
+    const vapidConfigured = !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY;
+    
     res.json({
       success: true,
       user: {
@@ -1256,9 +1258,12 @@ app.get('/api/debug/push-status', authMiddleware, async (req, res) => {
         status: subscriptions.length > 0 ? 'ACTIVO' : 'NO SUSCRITO'
       },
       vapid: {
-        configured: !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY,
-        public_key_set: !!process.env.VAPID_PUBLIC_KEY
-      }
+        configured: vapidConfigured,
+        public_key_set: !!process.env.VAPID_PUBLIC_KEY,
+        private_key_set: !!process.env.VAPID_PRIVATE_KEY,
+        public_key: vapidConfigured ? process.env.VAPID_PUBLIC_KEY : 'NOT SET'
+      },
+      ready_for_push: vapidConfigured && tableExists && subscriptions.length > 0
     });
   } catch (e) {
     console.error('Debug push status error:', e);
@@ -1266,6 +1271,117 @@ app.get('/api/debug/push-status', authMiddleware, async (req, res) => {
       success: false,
       error: 'Error al verificar estado',
       details: e.message 
+    });
+  }
+});
+
+// 🔧 ENDPOINT PARA CONFIGURAR TODO AUTOMÁTICAMENTE
+app.get('/api/setup-push', async (req, res) => {
+  try {
+    const results = {
+      steps: [],
+      success: true,
+      errors: []
+    };
+    
+    // Paso 1: Verificar VAPID keys
+    const vapidConfigured = !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY;
+    
+    if (!vapidConfigured) {
+      results.steps.push({
+        step: 'VAPID Keys',
+        status: 'ERROR',
+        message: 'VAPID keys no configuradas en variables de entorno'
+      });
+      results.errors.push({
+        type: 'VAPID_MISSING',
+        instructions: [
+          '1. Las VAPID keys locales son:',
+          `   PUBLIC_KEY=${process.env.VAPID_PUBLIC_KEY || 'BKLI_xE4Ubca8iBe8SlPsWn_ZHIEVdf9WnG4CT79qLHcONHR-JsQYO1rPHuIoZIPcFigRTe2xioxR4SkTDcXLkI'}`,
+          `   PRIVATE_KEY=${process.env.VAPID_PRIVATE_KEY || 'RzWob8QACjt5ECTU3n2TIcoIZcTHnmKAoANnnwCpIjw'}`,
+          '2. Ve a Render Dashboard → tu servicio backend → Environment',
+          '3. Agrega estas variables:',
+          '   - VAPID_PUBLIC_KEY',
+          '   - VAPID_PRIVATE_KEY',
+          '   - VAPID_SUBJECT=mailto:tu-email@example.com',
+          '4. Guarda y espera a que se redespliegue'
+        ]
+      });
+      results.success = false;
+    } else {
+      results.steps.push({
+        step: 'VAPID Keys',
+        status: 'OK',
+        message: 'VAPID keys configuradas correctamente'
+      });
+    }
+    
+    // Paso 2: Verificar tabla push_subscriptions
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'push_subscriptions'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      results.steps.push({
+        step: 'Database Migration',
+        status: 'PENDING',
+        message: 'Tabla push_subscriptions no existe'
+      });
+      results.errors.push({
+        type: 'MIGRATION_NEEDED',
+        instructions: [
+          '1. Ejecuta la migración visitando:',
+          '   https://pokedex-backend-rzjl.onrender.com/api/run-migration',
+          '2. Recarga la app en ambos navegadores (Ctrl+F5)'
+        ]
+      });
+      results.success = false;
+    } else {
+      results.steps.push({
+        step: 'Database Migration',
+        status: 'OK',
+        message: 'Tabla push_subscriptions existe'
+      });
+    }
+    
+    // Paso 3: Verificar columna status en friends
+    const statusCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_name = 'friends' AND column_name = 'status'
+      );
+    `);
+    
+    if (!statusCheck.rows[0].exists) {
+      results.steps.push({
+        step: 'Friends Status Column',
+        status: 'PENDING',
+        message: 'Columna status no existe en tabla friends'
+      });
+    } else {
+      results.steps.push({
+        step: 'Friends Status Column',
+        status: 'OK',
+        message: 'Columna status existe'
+      });
+    }
+    
+    if (results.success) {
+      results.message = '✅ Todo configurado correctamente! Las notificaciones push deberían funcionar.';
+    } else {
+      results.message = '⚠️ Hay pasos pendientes. Sigue las instrucciones para completar la configuración.';
+    }
+    
+    res.json(results);
+  } catch (e) {
+    console.error('Setup push error:', e);
+    res.status(500).json({
+      success: false,
+      error: 'Error durante la configuración',
+      details: e.message
     });
   }
 });

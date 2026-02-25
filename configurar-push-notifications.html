@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Notificaciones Push - Pokédex</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        h2 {
+            color: #333;
+            margin: 20px 0 15px;
+            font-size: 22px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .status-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #ccc;
+        }
+        
+        .status-box.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .status-box.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .status-box.warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+        
+        .status-box.pending {
+            background: #d1ecf1;
+            border-left-color: #17a2b8;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .step-icon {
+            font-size: 32px;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .step-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        
+        .step-desc {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #17a2b8;
+            margin: 15px 0;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 2;
+        }
+        
+        .important {
+            background: #ffe7e7;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #dc3545;
+            margin: 15px 0;
+        }
+        
+        .copy-btn {
+            background: #28a745;
+            padding: 8px 15px;
+            font-size: 14px;
+            margin: 5px 0;
+            width: auto;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🔔 Configurar Notificaciones Push</h1>
+            <p style="color: #666; margin-bottom: 20px;">
+                Sistema de configuración automática de notificaciones push para Pokédex
+            </p>
+            
+            <button onclick="runDiagnostic()">🔍 Verificar Estado del Sistema</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+    
+    <script>
+        const API_BASE = 'https://pokedex-backend-rzjl.onrender.com';
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('✅ Copiado al portapapeles!');
+            });
+        }
+        
+        async function runDiagnostic() {
+            document.getElementById('results').innerHTML = `
+                <div class="card">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 15px; color: #666;">Verificando configuración...</p>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/setup-push`);
+                const data = await response.json();
+                
+                let html = '<div class="card">';
+                html += '<h2>📊 Resultado del Diagnóstico</h2>';
+                
+                // Mostrar cada paso
+                data.steps.forEach(step => {
+                    let statusClass = 'pending';
+                    let icon = '⏳';
+                    
+                    if (step.status === 'OK') {
+                        statusClass = 'success';
+                        icon = '✅';
+                    } else if (step.status === 'ERROR') {
+                        statusClass = 'error';
+                        icon = '❌';
+                    } else if (step.status === 'PENDING') {
+                        statusClass = 'warning';
+                        icon = '⚠️';
+                    }
+                    
+                    html += `
+                        <div class="step">
+                            <div class="step-icon">${icon}</div>
+                            <div class="step-content">
+                                <div class="step-title">${step.step}</div>
+                                <div class="step-desc">${step.message}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                // Mostrar instrucciones si hay errores
+                if (data.errors && data.errors.length > 0) {
+                    html += '<h2>🔧 Pasos para Completar la Configuración</h2>';
+                    
+                    data.errors.forEach((error, index) => {
+                        html += '<div class="instructions">';
+                        html += `<h3 style="margin-bottom:10px;">${index + 1}. ${error.type}</h3>`;
+                        html += '<ol>';
+                        error.instructions.forEach(instruction => {
+                            // Si es una key, agregar botón de copiar
+                            if (instruction.includes('PUBLIC_KEY=') || instruction.includes('PRIVATE_KEY=')) {
+                                const match = instruction.match(/(PUBLIC_KEY|PRIVATE_KEY)=(.+)/);
+                                if (match) {
+                                    const keyName = match[1];
+                                    const keyValue = match[2];
+                                    html += `<li>${keyName}:<br>
+                                        <div class="code-block">${keyValue}</div>
+                                        <button class="copy-btn" onclick="copyToClipboard('${keyValue}')">📋 Copiar</button>
+                                    </li>`;
+                                }
+                            } else {
+                                html += `<li>${instruction}</li>`;
+                            }
+                        });
+                        html += '</ol>';
+                        html += '</div>';
+                    });
+                }
+                
+                // Resumen final
+                html += '<div class="' + (data.success ? 'status-box success' : 'status-box error') + '">';
+                html += `<h3>${data.message}</h3>`;
+                html += '</div>';
+                
+                // Botones de acción
+                if (!data.success) {
+                    html += '<h2>⚡ Acciones Rápidas</h2>';
+                    html += '<button onclick="runMigration()">📦 Ejecutar Migración</button>';
+                    html += '<button onclick="window.open(\'https://dashboard.render.com/\', \'_blank\')">🔧 Abrir Render Dashboard</button>';
+                }
+                
+                html += '</div>';
+                
+                // Documentación adicional
+                html += `
+                    <div class="card">
+                        <h2>📚 Documentación Completa</h2>
+                        <div class="important">
+                            <h3 style="margin-bottom:10px;">⚠️ IMPORTANTE: Configurar VAPID Keys en Render</h3>
+                            <p>Las VAPID keys son necesarias para que funcionen las notificaciones push. Sin ellas, las notificaciones NO se enviarán.</p>
+                        </div>
+                        
+                        <h3 style="margin-top:20px;">Pasos Detallados:</h3>
+                        <ol style="margin-left:20px; line-height:2;">
+                            <li><strong>Ir a Render Dashboard</strong>
+                                <ul style="margin-left:20px;">
+                                    <li>Ve a: <a href="https://dashboard.render.com/" target="_blank">https://dashboard.render.com/</a></li>
+                                    <li>Selecciona tu servicio backend</li>
+                                </ul>
+                            </li>
+                            <li><strong>Agregar Variables de Entorno</strong>
+                                <ul style="margin-left:20px;">
+                                    <li>Haz clic en "Environment" en el menú lateral</li>
+                                    <li>Haz clic en "Add Environment Variable"</li>
+                                    <li>Agrega estas 3 variables (copia los valores con los botones de arriba):</li>
+                                    <ul style="margin-left:20px;">
+                                        <li><code>VAPID_PUBLIC_KEY</code></li>
+                                        <li><code>VAPID_PRIVATE_KEY</code></li>
+                                        <li><code>VAPID_SUBJECT</code> = <code>mailto:tu-email@example.com</code></li>
+                                    </ul>
+                                </ul>
+                            </li>
+                            <li><strong>Guardar y Redesplegar</strong>
+                                <ul style="margin-left:20px;">
+                                    <li>Haz clic en "Save Changes"</li>
+                                    <li>Render redesplegará automáticamente (2-3 minutos)</li>
+                                </ul>
+                            </li>
+                            <li><strong>Ejecutar Migración</strong>
+                                <ul style="margin-left:20px;">
+                                    <li>Haz clic en el botón "Ejecutar Migración" arriba</li>
+                                    <li>O visita: <a href="${API_BASE}/api/run-migration" target="_blank">Ejecutar Migración</a></li>
+                                </ul>
+                            </li>
+                            <li><strong>Probar Notificaciones</strong>
+                                <ul style="margin-left:20px;">
+                                    <li>Recarga la app en ambos navegadores (Ctrl+F5)</li>
+                                    <li>Envía una solicitud de amistad</li>
+                                    <li>Deberías ver la notificación push 🔔</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+                `;
+                
+                document.getElementById('results').innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="card">
+                        <div class="status-box error">
+                            <h3>❌ Error de Conexión</h3>
+                            <p>${error.message}</p>
+                            <p style="margin-top: 10px;">¿El backend está desplegado en Render?</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function runMigration() {
+            document.getElementById('results').innerHTML = `
+                <div class="card">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 15px; color: #666;">Ejecutando migración...</p>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/run-migration`);
+                const data = await response.json();
+                
+                let html = '<div class="card">';
+                html += '<h2>📦 Resultado de la Migración</h2>';
+                
+                if (data.success) {
+                    html += '<div class="status-box success">';
+                    html += `<h3>✅ ${data.message}</h3>`;
+                    html += '<p style="margin-top:10px;">Ahora recarga la app en ambos navegadores (Ctrl+F5) y prueba enviando solicitudes de amistad.</p>';
+                    html += '</div>';
+                } else {
+                    html += '<div class="status-box warning">';
+                    html += `<h3>⚠️ ${data.message}</h3>`;
+                    html += '<p style="margin-top:10px;">Es posible que la migración ya se haya ejecutado antes.</p>';
+                    html += '</div>';
+                }
+                
+                html += '<button onclick="runDiagnostic()">🔍 Verificar Estado Nuevamente</button>';
+                html += '</div>';
+                
+                document.getElementById('results').innerHTML = html;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="card">
+                        <div class="status-box error">
+                            <h3>❌ Error</h3>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Ejecutar diagnóstico automáticamente al cargar
+        window.onload = () => {
+            runDiagnostic();
+        };
+    </script>
+</body>
+</html>
