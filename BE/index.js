@@ -536,26 +536,19 @@ app.post('/api/push/unsubscribe', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Unsubscribe error' });
   }
 });
-    console.error('[Push] Unsubscription error:', err);
-    res.status(500).json({ error: 'Unsubscription error' });
-  }
-});
-
-// Obtener estadísticas de suscripciones (endpoint de admin/debug)
-app.get('/api/push/stats', authMiddleware, (req, res) => {
-  try {
-    const stats = getSubscriptionStats();
-    res.json(stats);
-  } catch (err) {
-    console.error('[Push] Stats error:', err);
-    res.status(500).json({ error: 'Stats error' });
-  }
-});
 
 // Endpoint de prueba para enviar notificación push
 app.post('/api/push/test', authMiddleware, async (req, res) => {
   try {
     const user = await getUserByEmail(req.user.email);
+    const subs = await getPushSubscriptions(user.id);
+    
+    if (subs.length === 0) {
+      return res.status(404).json({ 
+        error: 'No subscriptions found',
+        message: 'Debes permitir notificaciones primero' 
+      });
+    }
     
     const testPayload = {
       title: '🧪 Notificación de Prueba',
@@ -572,8 +565,7 @@ app.post('/api/push/test', authMiddleware, async (req, res) => {
     
     console.log(`🧪 Enviando notificación de prueba a usuario ${user.name} (ID: ${user.id})`);
     
-    const { sendPushNotification } = require('./lib/push-notifications');
-    const result = await sendPushNotification(user.id, testPayload);
+    const result = await sendPushNotification(subs, testPayload);
     
     if (result.success) {
       console.log('✅ Notificación de prueba enviada exitosamente');
