@@ -11,6 +11,7 @@ import { validateCode } from '../utils/validation'
 const router = useRouter()
 const friends = ref([])
 const pendingRequests = ref([])
+const sentRequests = ref([])
 const loading = ref(true)
 const loadingRequests = ref(false)
 const myCode = ref('')
@@ -27,13 +28,15 @@ async function loadFriends(){
   
   loading.value = true
   try{
-    const [friendsData, requestsData] = await Promise.all([
+    const [friendsData, requestsData, sentData] = await Promise.all([
       api('/api/friends'),
-      api('/api/friends/requests')
+      api('/api/friends/requests'),
+      api('/api/friends/sent')
     ])
     
     friends.value = friendsData.friends || []
     pendingRequests.value = requestsData.requests || []
+    sentRequests.value = sentData.sentRequests || []
     
     const user = currentUser()
     myCode.value = user.code || ''
@@ -89,7 +92,7 @@ async function addFriend(){
     friends.value = result.friends || []
     friendCode.value = ''
     success('✓ Solicitud de amistad enviada')
-    loadFriends() // Recargar para actualizar solicitudes
+    loadFriends() // Recargar para actualizar solicitudes enviadas
   } else if (networkError.value) {
     if (networkError.value.includes('No autorizado') || networkError.value.includes('Unauthorized')) {
       showError('⚠️ Sesión expirada. Redirigiendo al login...')
@@ -231,6 +234,33 @@ onMounted(loadFriends)
             <button class="btn-reject" @click="rejectRequest(request.id)">
               ✗ Rechazar
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sent Requests Section (Waiting for response) -->
+    <div v-if="sentRequests.length > 0" class="sent-requests-card">
+      <h3>📤 Solicitudes Enviadas ({{ sentRequests.length }})</h3>
+      <p class="sent-desc">Esperando respuesta de estos entrenadores</p>
+      
+      <div class="requests-grid">
+        <div 
+          v-for="request in sentRequests" 
+          :key="request.id"
+          class="request-card sent"
+        >
+          <div class="request-avatar">
+            {{ (request.name || request.email || 'A')[0].toUpperCase() }}
+          </div>
+          <div class="request-info">
+            <div class="request-name">{{ request.name || 'Entrenador' }}</div>
+            <div class="request-code">🔖 {{ request.code }}</div>
+          </div>
+          <div class="request-status">
+            <span class="status-badge pending">
+              ⏳ Pendiente
+            </span>
           </div>
         </div>
       </div>
@@ -875,6 +905,66 @@ onMounted(loadFriends)
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(244, 67, 54, 0.5);
   background: linear-gradient(135deg, #D32F2F 0%, #C62828 100%);
+}
+
+/* Sent Requests Card */
+.sent-requests-card{
+  background: white;
+  border-radius: 20px;
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 3px solid #3B4CCA;
+}
+
+.sent-requests-card h3{
+  color: #3B4CCA;
+  font-weight: 900;
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.sent-desc{
+  color: #666;
+  margin: 0 0 20px 0;
+  font-size: 14px;
+}
+
+.request-card.sent{
+  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+  border: 2px solid #3B4CCA;
+}
+
+.request-card.sent:hover{
+  box-shadow: 0 4px 12px rgba(59, 76, 202, 0.3);
+}
+
+.request-card.sent .request-avatar{
+  background: linear-gradient(135deg, #3B4CCA 0%, #2C3E95 100%);
+  box-shadow: 0 3px 10px rgba(59, 76, 202, 0.4);
+}
+
+.request-status{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-badge{
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.status-badge.pending{
+  background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%);
+  color: #222;
+  border: 2px solid #FF8F00;
+  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
 }
 
 @media (max-width: 768px){

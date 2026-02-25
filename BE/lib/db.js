@@ -262,6 +262,27 @@ async function getPendingFriendRequests(userId) {
   }
 }
 
+// Obtener solicitudes que YO envié (esperando respuesta)
+async function getSentFriendRequests(userId) {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.code, f.created_at, f.id as friendship_id
+       FROM friends f 
+       JOIN users u ON f.friend_id = u.id 
+       WHERE f.user_id = $1 AND f.status = 'pending'
+       ORDER BY f.created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  } catch (error) {
+    if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Columna status no existe, devolviendo array vacío para sent requests');
+      return [];
+    }
+    throw error;
+  }
+}
+
 async function acceptFriendRequest(userId, friendId) {
   try {
     // Actualizar la solicitud a 'accepted'
@@ -315,13 +336,19 @@ async function removeFriend(userId, friendId) {
 
 async function savePushSubscription(userId, subscription) {
   try {
-    await pool.query(
+    console.log(`💾 Guardando suscripción para userId: ${userId}`);
+    console.log(`📍 Endpoint: ${subscription.endpoint.substring(0, 50)}...`);
+    
+    const result = await pool.query(
       `INSERT INTO push_subscriptions (user_id, endpoint, keys_p256dh, keys_auth) 
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (user_id, endpoint) 
-       DO UPDATE SET keys_p256dh = $3, keys_auth = $4, updated_at = NOW()`,
+       DO UPDATE SET keys_p256dh = $3, keys_auth = $4, updated_at = NOW()
+       RETURNING *`,
       [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
     );
+    
+    console.log(`✅ Suscripción guardada/actualizada exitosamente`);
     return true;
   } catch (error) {
     // Si la tabla no existe, solo registrar en consola pero no fallar
@@ -329,16 +356,21 @@ async function savePushSubscription(userId, subscription) {
       console.log('⚠️  Tabla push_subscriptions no existe. Ejecuta la migración para habilitar notificaciones push.');
       return false;
     }
+    console.error('❌ Error guardando suscripción:', error);
     throw error;
   }
 }
 
 async function getPushSubscriptions(userId) {
   try {
+    console.log(`📱 Buscando suscripciones para userId: ${userId}`);
+    
     const result = await pool.query(
       'SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions WHERE user_id = $1',
       [userId]
     );
+    
+    console.log(`📊 Encontradas ${result.rows.length} suscripción(es)`);
     
     return result.rows.map(row => ({
       endpoint: row.endpoint,
@@ -353,6 +385,7 @@ async function getPushSubscriptions(userId) {
       console.log('⚠️  Tabla push_subscriptions no existe, devolviendo array vacío');
       return [];
     }
+    console.error('❌ Error obteniendo suscripciones:', error);
     throw error;
   }
 }
@@ -905,6 +938,7 @@ module.exports = {
   getFriends,
   addFriend,
   getPendingFriendRequests,
+  getSentFriendRequests,
   acceptFriendRequest,
   rejectFriendRequest,
   removeFriend,

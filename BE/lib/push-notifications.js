@@ -21,13 +21,22 @@ if (vapidPublicKey && vapidPrivateKey) {
 /**
  * Enviar push notification a un usuario
  * @param {Array} userSubs - Array de suscripciones del usuario
+ * @param {Object} payload - Payload de la notificación
  */
 async function sendPushNotification(userSubs, payload) {
+  
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    console.error('❌ VAPID keys no configuradas');
+    return { success: false, message: 'VAPID keys not configured' };
+  }
   
   if (!userSubs || userSubs.length === 0) {
     console.log(`📱 Sin suscripciones para este usuario`);
     return { success: false, message: 'No subscriptions found' };
   }
+  
+  console.log(`📤 Intentando enviar notificación a ${userSubs.length} suscripción(es)...`);
+  console.log(`📦 Payload:`, JSON.stringify(payload));
   
   const payloadString = JSON.stringify(payload);
   const results = [];
@@ -35,11 +44,14 @@ async function sendPushNotification(userSubs, payload) {
   
   for (const subscription of userSubs) {
     try {
+      console.log(`🔄 Enviando a endpoint: ${subscription.endpoint.substring(0, 50)}...`);
       await webpush.sendNotification(subscription, payloadString);
       results.push({ success: true, endpoint: subscription.endpoint });
-      console.log(`📤 Push notification enviada`);
+      console.log(`✅ Push notification enviada exitosamente`);
     } catch (error) {
       console.error(`❌ Error enviando push:`, error.message);
+      console.error(`   Status Code:`, error.statusCode);
+      console.error(`   Body:`, error.body);
       
       // Si la suscripción expiró o es inválida (410, 404), marcarla para eliminar
       if (error.statusCode === 410 || error.statusCode === 404) {

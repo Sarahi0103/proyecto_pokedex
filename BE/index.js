@@ -25,6 +25,7 @@ const {
   getFriends,
   addFriend,
   getPendingFriendRequests,
+  getSentFriendRequests,
   acceptFriendRequest,
   rejectFriendRequest,
   removeFriend,
@@ -499,19 +500,30 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
   try {
     const { subscription } = req.body;
     
+    console.log('📱 Solicitud de suscripción recibida');
+    console.log('📦 Datos de suscripción:', JSON.stringify(subscription, null, 2));
+    
     if (!subscription || !subscription.endpoint) {
+      console.error('❌ Datos de suscripción inválidos');
       return res.status(400).json({ error: 'Subscription data required' });
     }
     
     const user = await getUserByEmail(req.user.email);
-    await savePushSubscription(user.id, subscription);
+    console.log(`👤 Usuario: ${user.name} (${user.email})`);
     
-    console.log(`📱 Usuario ${user.name} suscrito a push notifications`);
+    const saved = await savePushSubscription(user.id, subscription);
     
-    res.json({ 
-      success: true, 
-      message: 'Subscribed to push notifications successfully' 
-    });
+    if (saved) {
+      console.log(`✅ Usuario ${user.name} suscrito a push notifications`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Subscribed to push notifications successfully' 
+      });
+    } else {
+      console.error('⚠️  No se pudo guardar la suscripción');
+      res.status(500).json({ error: 'Failed to save subscription' });
+    }
   } catch (err) {
     console.error('[Push] Subscription error:', err);
     res.status(500).json({ error: 'Subscription error' });
@@ -700,19 +712,24 @@ app.post('/api/friends/add', authMiddleware, apiFriendsLimiter, async (req,res)=
     
     // Enviar push notification al amigo
     console.log('📤 Enviando push notification de amistad...');
-    getPushSubscriptions(friend.id)
-      .then(async (subs) => {
-        if (subs.length > 0) {
-          const payload = createFriendRequestPayload(user.name);
-          const result = await sendPushNotification(subs, payload);
-          if (result.success) {
-            console.log('✅ Push notification enviada correctamente');
-          }
+    try {
+      const subs = await getPushSubscriptions(friend.id);
+      if (subs && subs.length > 0) {
+        console.log(`📱 Encontradas ${subs.length} suscripciones para el amigo`);
+        const payload = createFriendRequestPayload(user.name);
+        console.log('📦 Payload de notificación:', JSON.stringify(payload));
+        const result = await sendPushNotification(subs, payload);
+        if (result.success) {
+          console.log('✅ Push notification enviada correctamente');
         } else {
-          console.log('⚠️  Usuario sin suscripción push');
+          console.log('⚠️  No se pudo enviar la notificación:', result);
         }
-      })
-      .catch(err => console.error('❌ Error enviando push:', err));
+      } else {
+        console.log('⚠️  Usuario sin suscripción push');
+      }
+    } catch (err) {
+      console.error('❌ Error enviando push notification:', err);
+    }
     
     const friends = await getFriends(user.id);
     console.log('👥 Total amigos:', friends.length);
@@ -723,12 +740,24 @@ app.post('/api/friends/add', authMiddleware, apiFriendsLimiter, async (req,res)=
   }
 });
 
-// Obtener solicitudes de amistad pendientes
+// Obtener solicitudes de amistad pendientes (recibidas)
 app.get('/api/friends/requests', authMiddleware, async (req, res) => {
   try {
     const user = await getUserByEmail(req.user.email);
     const requests = await getPendingFriendRequests(user.id);
     res.json({ requests });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Obtener solicitudes que YO envié (esperando respuesta)
+app.get('/api/friends/sent', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserByEmail(req.user.email);
+    const sentRequests = await getSentFriendRequests(user.id);
+    res.json({ sentRequests });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Database error' });
@@ -749,19 +778,24 @@ app.post('/api/friends/accept', authMiddleware, async (req, res) => {
     
     // Enviar notificación push al usuario que envió la solicitud
     console.log('📤 Enviando push notification de aceptación...');
-    getPushSubscriptions(friendId)
-      .then(async (subs) => {
-        if (subs.length > 0) {
-          const payload = createFriendAcceptedPayload(user.name);
-          const result = await sendPushNotification(subs, payload);
-          if (result.success) {
-            console.log('✅ Push notification de aceptación enviada');
-          }
+    try {
+      const subs = await getPushSubscriptions(friendId);
+      if (subs && subs.length > 0) {
+        console.log(`📱 Encontradas ${subs.length} suscripciones para el amigo`);
+        const payload = createFriendAcceptedPayload(user.name);
+        console.log('📦 Payload de notificación:', JSON.stringify(payload));
+        const result = await sendPushNotification(subs, payload);
+        if (result.success) {
+          console.log('✅ Push notification de aceptación enviada');
         } else {
-          console.log('⚠️  Usuario sin suscripción push');
+          console.log('⚠️  No se pudo enviar la notificación:', result);
         }
-      })
-      .catch(err => console.error('❌ Error enviando push:', err));
+      } else {
+        console.log('⚠️  Usuario sin suscripción push');
+      }
+    } catch (err) {
+      console.error('❌ Error enviando push notification:', err);
+    }
     
     const friends = await getFriends(user.id);
     res.json({ friends });
