@@ -166,7 +166,8 @@ onMounted(async () => {
 // ============================================
 
 function initializeSocket() {
-  socket.value = io('http://localhost:4000', {
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
+  socket.value = io(API_BASE, {
     transports: ['websocket', 'polling'],
     reconnection: true
   })
