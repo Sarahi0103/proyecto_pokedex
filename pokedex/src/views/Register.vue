@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { useNetworkRequest } from '../composables/useNetworkRequest'
 import ValidationErrors from '../components/ValidationErrors.vue'
 import FormInput from '../components/FormInput.vue'
-import { validateRegisterForm, validateEmail, validatePassword } from '../utils/validation'
+import { validateRegisterForm, validateEmail, validatePassword, validateName } from '../utils/validation'
 import { useNotifications } from '../composables/useNotifications'
 
 const router = useRouter()
@@ -108,6 +108,7 @@ function registerWithGoogle() {
           icon="👤"
           id="name"
           :disabled="loading"
+          :validator="validateName"
           :show-validation="true"
           autocomplete="name"
         />

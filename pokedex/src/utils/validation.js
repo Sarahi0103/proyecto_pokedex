@@ -23,6 +23,11 @@ export function validateTeamName(name) {
   return name && name.trim().length >= 2 && name.trim().length <= 30
 }
 
+export function validateName(name) {
+  // Nombre: 2-30 caracteres, solo letras y espacios
+  return name && name.trim().length >= 2 && name.trim().length <= 30 && /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(name.trim())
+}
+
 export function validatePokemonCount(count) {
   return count >= 1 && count <= 6
 }
