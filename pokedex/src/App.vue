@@ -1,18 +1,20 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router'
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { logout } from './api'
 import { user, clearUser } from './store'
 import ThemeToggle from './components/ThemeToggle.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import { useAnalytics } from './composables/useAnalytics'
 import { usePerformance } from './composables/usePerformance'
+import { usePushNotifications } from './composables/usePushNotifications'
 import './styles.css'
 
 const router = useRouter()
 const route = useRoute()
 const { setupAutoTracking } = useAnalytics()
 const { monitorWebVitals } = usePerformance()
+const { autoSubscribe } = usePushNotifications()
 
 onMounted(() => {
   // Inicializar analytics
@@ -20,6 +22,14 @@ onMounted(() => {
   
   // Monitorear Web Vitals
   monitorWebVitals()
+  
+  // Auto-suscribirse a notificaciones push si el usuario está autenticado
+  if (user.value) {
+    console.log('🔔 Usuario autenticado, intentando auto-suscripción a push notifications...')
+    setTimeout(() => {
+      autoSubscribe()
+    }, 1000) // Esperar 1 segundo para que el SW esté listo
+  }
   
   // Manejar clicks en notificaciones push
   if ('serviceWorker' in navigator) {
@@ -30,6 +40,16 @@ onMounted(() => {
         router.push(url)
       }
     })
+  }
+})
+
+// Observar cambios en el estado de autenticación del usuario
+watch(user, (newUser) => {
+  if (newUser) {
+    console.log('🔔 Usuario inició sesión, auto-suscribiendo a push notifications...')
+    setTimeout(() => {
+      autoSubscribe()
+    }, 1000)
   }
 })
 

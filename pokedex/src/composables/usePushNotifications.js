@@ -190,6 +190,57 @@ export function usePushNotifications() {
     }
   }
 
+  // Auto-suscribirse (silencioso, sin mostrar errores al usuario)
+  async function autoSubscribe() {
+    try {
+      // Verificar si ya está suscrito
+      if (isSubscribed.value) {
+        console.log('📱 Ya está suscrito, no es necesario suscribirse nuevamente');
+        return true;
+      }
+
+      // Verificar soporte
+      if (!checkSupport()) {
+        console.info('ℹ️ Push notifications no soportadas en este navegador');
+        return false;
+      }
+
+      // Verificar si ya tiene permiso concedido
+      if (Notification.permission === 'granted') {
+        console.log('✅ Permiso ya concedido, suscribiendo automáticamente...');
+        await subscribe();
+        return true;
+      }
+
+      // Si el permiso está en "default", solicitarlo automáticamente
+      if (Notification.permission === 'default') {
+        console.log('📱 Solicitando permiso de notificaciones...');
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+          console.log('✅ Permiso concedido, suscribiendo...');
+          await subscribe();
+          return true;
+        } else if (permission === 'denied') {
+          console.info('ℹ️ Usuario denegó permisos de notificación');
+          return false;
+        }
+      }
+
+      // Si el permiso fue denegado, no hacer nada
+      if (Notification.permission === 'denied') {
+        console.info('ℹ️ Permisos de notificación denegados previamente');
+        return false;
+      }
+
+      return false;
+    } catch (err) {
+      // Silenciar errores para no interrumpir la experiencia del usuario
+      console.warn('⚠️ No se pudo auto-suscribir a notificaciones:', err.message);
+      return false;
+    }
+  }
+
   // Inicializar
   onMounted(async () => {
     isSupported.value = checkSupport();
@@ -208,6 +259,7 @@ export function usePushNotifications() {
     subscribe,
     unsubscribe,
     checkSubscription,
-    requestPermission
+    requestPermission,
+    autoSubscribe
   };
 }
