@@ -178,65 +178,121 @@ async function deleteTeam(userId, teamIndex) {
 // ============================================
 
 async function getFriends(userId) {
-  const result = await pool.query(
-    `SELECT u.id, u.name, u.email, u.code 
-     FROM friends f 
-     JOIN users u ON f.friend_id = u.id 
-     WHERE f.user_id = $1 AND f.status = 'accepted'
-     ORDER BY f.created_at DESC`,
-    [userId]
-  );
-  
-  return result.rows;
+  try {
+    // Intentar con status (nueva versión)
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.code 
+       FROM friends f 
+       JOIN users u ON f.friend_id = u.id 
+       WHERE f.user_id = $1 AND f.status = 'accepted'
+       ORDER BY f.created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  } catch (error) {
+    // Si falla por columna inexistente, devolver todos los amigos (versión antigua)
+    if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Usando versión antigua de friends (sin filtro de status)');
+      const result = await pool.query(
+        `SELECT u.id, u.name, u.email, u.code 
+         FROM friends f 
+         JOIN users u ON f.friend_id = u.id 
+         WHERE f.user_id = $1
+         ORDER BY f.created_at DESC`,
+        [userId]
+      );
+      return result.rows;
+    }
+    throw error;
+  }
 }
 
 async function addFriend(userId, friendId) {
-  // Agregar solicitud de amistad (solo del lado del usuario que envía)
-  // La otra persona recibirá la solicitud como "pending"
-  await pool.query(
-    `INSERT INTO friends (user_id, friend_id, status) 
-     VALUES ($1, $2, 'pending') 
-     ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'pending'`,
-    [userId, friendId]
-  );
+  // Intentar con status (nueva versión con migración)
+  try {
+    await pool.query(
+      `INSERT INTO friends (user_id, friend_id, status) 
+       VALUES ($1, $2, 'pending') 
+       ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'pending'`,
+      [userId, friendId]
+    );
+  } catch (error) {
+    // Si falla por columna inexistente, usar version antigua (sin status)
+    if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Usando versión antigua de friends (sin columna status)');
+      await pool.query(
+        `INSERT INTO friends (user_id, friend_id) 
+         VALUES ($1, $2) 
+         ON CONFLICT (user_id, friend_id) DO NOTHING`,
+        [userId, friendId]
+      );
+      // Agregar la relación bidireccional inmediatamente
+      await pool.query(
+        `INSERT INTO friends (user_id, friend_id) 
+         VALUES ($1, $2) 
+         ON CONFLICT (user_id, friend_id) DO NOTHING`,
+        [friendId, userId]
+      );
+    } else {
+      throw error;
+    }
+  }
   return true;
 }
 
 async function getPendingFriendRequests(userId) {
-  // Obtener solicitudes pendientes recibidas
-  const result = await pool.query(
-    `SELECT u.id, u.name, u.email, u.code, f.created_at, f.id as friendship_id
-     FROM friends f 
-     JOIN users u ON f.user_id = u.id 
-     WHERE f.friend_id = $1 AND f.status = 'pending'
-     ORDER BY f.created_at DESC`,
-    [userId]
-  );
-  return result.rows;
+  // Intentar con status (nueva versión con migración)
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.code, f.created_at, f.id as friendship_id
+       FROM friends f 
+       JOIN users u ON f.user_id = u.id 
+       WHERE f.friend_id = $1 AND f.status = 'pending'
+       ORDER BY f.created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  } catch (error) {
+    // Si falla por columna inexistente, devolver array vacío
+    if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Columna status no existe, devolviendo array vacío para pending requests');
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function acceptFriendRequest(userId, friendId) {
-  // Actualizar la solicitud a 'accepted'
-  await pool.query(
-    `UPDATE friends 
-     SET status = 'accepted' 
-     WHERE user_id = $1 AND friend_id = $2`,
-    [friendId, userId]
-  );
-  
-  // Crear la relación bidireccional (el otro lado)
-  await pool.query(
-    `INSERT INTO friends (user_id, friend_id, status) 
-     VALUES ($1, $2, 'accepted') 
-     ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
-    [userId, friendId]
-  );
+  try {
+    // Actualizar la solicitud a 'accepted'
+    await pool.query(
+      `UPDATE friends 
+       SET status = 'accepted' 
+       WHERE user_id = $1 AND friend_id = $2`,
+      [friendId, userId]
+    );
+    
+    // Crear la relación bidireccional (el otro lado)
+    await pool.query(
+      `INSERT INTO friends (user_id, friend_id, status) 
+       VALUES ($1, $2, 'accepted') 
+       ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
+      [userId, friendId]
+    );
+  } catch (error) {
+    // Si falla por columna inexistente, la relación ya existe (versión antigua)
+    if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Columna status no existe, la relación ya es bidireccional');
+      return true;
+    }
+    throw error;
+  }
   
   return true;
 }
 
 async function rejectFriendRequest(userId, friendId) {
-  // Eliminar la solicitud rechazada
+  // Eliminar la solicitud rechazada (funciona con y sin status)
   await pool.query(
     'DELETE FROM friends WHERE user_id = $1 AND friend_id = $2',
     [friendId, userId]
