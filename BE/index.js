@@ -1156,6 +1156,51 @@ app.get('/api/battles/history', authMiddleware, async (req, res) => {
   }
 });
 
+// 🔧 ENDPOINT DE DIAGNÓSTICO Y REPARACIÓN DE CÓDIGOS DE USUARIO
+app.get('/api/fix-user-codes', async (req, res) => {
+  try {
+    // Obtener usuarios sin código o con código nulo
+    const result = await pool.query(
+      `SELECT id, email, code FROM users WHERE code IS NULL OR code = ''`
+    );
+    
+    const usersWithoutCode = result.rows;
+    const fixedUsers = [];
+    
+    // Generar y asignar códigos a usuarios que no los tienen
+    for (const user of usersWithoutCode) {
+      const newCode = Math.random().toString(36).slice(2, 9).toUpperCase();
+      await pool.query(
+        'UPDATE users SET code = $1 WHERE id = $2',
+        [newCode, user.id]
+      );
+      fixedUsers.push({ email: user.email, newCode });
+    }
+    
+    // Obtener todos los usuarios para verificación
+    const allUsers = await pool.query('SELECT id, email, code FROM users ORDER BY id');
+    
+    res.json({ 
+      success: true,
+      message: `Códigos verificados y reparados`,
+      usersFixed: fixedUsers.length,
+      fixedDetails: fixedUsers,
+      allUsers: allUsers.rows.map(u => ({
+        id: u.id,
+        email: u.email,
+        code: u.code || 'SIN CÓDIGO'
+      }))
+    });
+  } catch (e) {
+    console.error('Fix user codes error:', e);
+    res.status(500).json({ 
+      success: false,
+      error: 'Error al reparar códigos',
+      details: e.message 
+    });
+  }
+});
+
 // Configurar Socket.io para batallas en tiempo real
 setupBattleSocket(io);
 
