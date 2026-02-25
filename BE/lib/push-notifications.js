@@ -1,5 +1,6 @@
 // Push Notifications Manager
 const webpush = require('web-push');
+const { getPushSubscriptions, removePushSubscription } = require('./db');
 
 // Configurar VAPID keys
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
@@ -18,71 +19,11 @@ if (vapidPublicKey && vapidPrivateKey) {
   console.warn('   Genera las keys con: node generate-vapid-keys.js');
 }
 
-// Almacenamiento en memoria de suscripciones (en producción usar DB)
-// Estructura: { userId: [subscription1, subscription2, ...] }
-const subscriptions = new Map();
-
-/**
- * Guardar una suscripción de usuario
- */
-function saveSubscription(userId, subscription) {
-  if (!subscriptions.has(userId)) {
-    subscriptions.set(userId, []);
-  }
-  
-  const userSubs = subscriptions.get(userId);
-  
-  // Verificar si ya existe esta suscripción
-  const exists = userSubs.some(sub => 
-    sub.endpoint === subscription.endpoint
-  );
-  
-  if (!exists) {
-    userSubs.push(subscription);
-    console.log(`📱 Nueva suscripción guardada para usuario ${userId}`);
-  }
-  
-  return true;
-}
-
-/**
- * Eliminar una suscripción
- */
-function removeSubscription(userId, endpoint) {
-  if (!subscriptions.has(userId)) {
-    return false;
-  }
-  
-  const userSubs = subscriptions.get(userId);
-  const index = userSubs.findIndex(sub => sub.endpoint === endpoint);
-  
-  if (index !== -1) {
-    userSubs.splice(index, 1);
-    console.log(`📱 Suscripción eliminada para usuario ${userId}`);
-    
-    // Si no quedan suscripciones, eliminar el usuario del Map
-    if (userSubs.length === 0) {
-      subscriptions.delete(userId);
-    }
-    
-    return true;
-  }
-  
-  return false;
-}
-
-/**
- * Obtener todas las suscripciones de un usuario
- */
-function getUserSubscriptions(userId) {
-  return subscriptions.get(userId) || [];
-}
-
 /**
  * Enviar push notification a un usuario
  */
 async function sendPushNotification(userId, payload) {
-  const userSubs = getUserSubscriptions(userId);
+  const userSubs = await getPushSubscriptions(userId);
   
   if (userSubs.length === 0) {
     console.log(`📱 Sin suscripciones para usuario ${userId}`);
@@ -102,7 +43,7 @@ async function sendPushNotification(userId, payload) {
       
       // Si la suscripción expiró o es inválida (410, 404), eliminarla
       if (error.statusCode === 410 || error.statusCode === 404) {
-        removeSubscription(userId, subscription.endpoint);
+        await removePushSubscription(userId, subscription.endpoint);
       }
       
       results.push({ 
@@ -189,28 +130,30 @@ async function sendBattleAcceptedNotification(userId, opponentName, battleId) {
 }
 
 /**
- * Obtener estadísticas de suscripciones
+ * Enviar notificación de amistad aceptada
  */
-function getSubscriptionStats() {
-  let totalSubs = 0;
-  subscriptions.forEach(subs => {
-    totalSubs += subs.length;
-  });
-  
-  return {
-    totalUsers: subscriptions.size,
-    totalSubscriptions: totalSubs
+async function sendFriendAcceptedNotification(userId, friendName) {
+  const payload = {
+    title: '✅ Solicitud aceptada',
+    body: `${friendName} aceptó tu solicitud de amistad!`,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-72.png',
+    tag: 'friend-accepted',
+    data: {
+      type: 'friend-accepted',
+      url: '/friends'
+    }
   };
+  
+  return await sendPushNotification(userId, payload);
 }
 
 module.exports = {
-  saveSubscription,
-  removeSubscription,
-  getUserSubscriptions,
   sendPushNotification,
   sendFriendRequestNotification,
   sendBattleChallengeNotification,
   sendBattleAcceptedNotification,
-  getSubscriptionStats,
+  sendFriendAcceptedNotification,
   getVapidPublicKey: () => vapidPublicKey
 };
+

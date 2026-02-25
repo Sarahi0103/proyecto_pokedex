@@ -24,6 +24,13 @@ const {
   deleteTeam,
   getFriends,
   addFriend,
+  getPendingFriendRequests,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  removeFriend,
+  savePushSubscription,
+  getPushSubscriptions,
+  removePushSubscription,
   // Batallas
   createBattleChallenge,
   getPendingChallenges,
@@ -43,13 +50,10 @@ const { setupBattleSocket, notifyUser } = require('./lib/battle-socket');
 
 // Push Notifications
 const {
-  saveSubscription,
-  removeSubscription,
-  getUserSubscriptions,
   sendFriendRequestNotification,
   sendBattleChallengeNotification,
   sendBattleAcceptedNotification,
-  getSubscriptionStats,
+  sendFriendAcceptedNotification,
   getVapidPublicKey
 } = require('./lib/push-notifications');
 
@@ -276,6 +280,73 @@ app.get('/api/init-database-setup', async (req, res) => {
   }
 });
 
+// Endpoint para ejecutar migración de amigos y push notifications
+app.get('/api/run-migration', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { Pool } = require('pg');
+    
+    // Leer migration_friends_push.sql
+    const migrationPath = path.join(__dirname, 'database', 'migration_friends_push.sql');
+    const migration = fs.readFileSync(migrationPath, 'utf-8');
+    
+    // Crear pool temporal con la misma config que el endpoint anterior
+    const pool = new Pool(
+      process.env.DATABASE_URL
+        ? {
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
+          }
+        : {
+            host: process.env.DB_HOST || 'localhost',
+            port: process.env.DB_PORT || 5432,
+            database: process.env.DB_NAME || 'pokedex',
+            user: process.env.DB_USER || 'postgres',
+            password: process.env.DB_PASSWORD || '123',
+          }
+    );
+    
+    console.log('🔄 Ejecutando migración...');
+    
+    // Ejecutar migración
+    await pool.query(migration);
+    
+    // Verificar que se creó la tabla push_subscriptions
+    const result = await pool.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name IN ('friends', 'push_subscriptions')
+      ORDER BY table_name
+    `);
+    
+    // Verificar columna status en friends
+    const columnsResult = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'friends'
+      ORDER BY ordinal_position
+    `);
+    
+    await pool.end();
+    
+    console.log('✅ Migración completada exitosamente');
+    
+    res.json({
+      success: true,
+      message: '✅ Migration completed successfully',
+      tables: result.rows.map(r => r.table_name),
+      friends_columns: columnsResult.rows.map(r => r.column_name)
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Migration failed: ' + error.message
+    });
+  }
+});
+
 // Auth
 app.post('/auth/register', authLimiter, async (req,res)=>{
   try{
@@ -431,7 +502,7 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
     }
     
     const user = await getUserByEmail(req.user.email);
-    saveSubscription(user.id, subscription);
+    await savePushSubscription(user.id, subscription);
     
     console.log(`📱 Usuario ${user.name} suscrito a push notifications`);
     
@@ -455,15 +526,15 @@ app.post('/api/push/unsubscribe', authMiddleware, async (req, res) => {
     }
     
     const user = await getUserByEmail(req.user.email);
-    const removed = removeSubscription(user.id, endpoint);
+    await removePushSubscription(user.id, endpoint);
     
-    if (removed) {
-      console.log(`📱 Usuario ${user.name} desuscrito de push notifications`);
-      res.json({ success: true, message: 'Unsubscribed successfully' });
-    } else {
-      res.status(404).json({ error: 'Subscription not found' });
-    }
+    console.log(`📱 Usuario ${user.name} desuscrito de push notifications`);
+    res.json({ success: true, message: 'Unsubscribed successfully' });
   } catch (err) {
+    console.error('[Push] Unsubscribe error:', err);
+    res.status(500).json({ error: 'Unsubscribe error' });
+  }
+});
     console.error('[Push] Unsubscription error:', err);
     res.status(500).json({ error: 'Unsubscription error' });
   }
@@ -649,6 +720,89 @@ app.post('/api/friends/add', authMiddleware, apiFriendsLimiter, async (req,res)=
     console.log('👥 Total amigos:', friends.length);
     res.json({ friends });
   }catch(e){
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Obtener solicitudes de amistad pendientes
+app.get('/api/friends/requests', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserByEmail(req.user.email);
+    const requests = await getPendingFriendRequests(user.id);
+    res.json({ requests });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Aceptar solicitud de amistad
+app.post('/api/friends/accept', authMiddleware, async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    
+    if (!friendId) {
+      return res.status(400).json({ error: 'Friend ID required' });
+    }
+    
+    const user = await getUserByEmail(req.user.email);
+    await acceptFriendRequest(user.id, friendId);
+    
+    // Enviar notificación push al usuario que envió la solicitud
+    console.log('📤 Enviando push notification de aceptación...');
+    sendFriendAcceptedNotification(friendId, user.name)
+      .then(result => {
+        if (result.success) {
+          console.log('✅ Push notification de aceptación enviada');
+        } else {
+          console.log('⚠️  Push notification no enviada (usuario sin suscripción)');
+        }
+      })
+      .catch(err => console.error('❌ Error enviando push:', err));
+    
+    const friends = await getFriends(user.id);
+    res.json({ friends });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Rechazar solicitud de amistad
+app.post('/api/friends/reject', authMiddleware, async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    
+    if (!friendId) {
+      return res.status(400).json({ error: 'Friend ID required' });
+    }
+    
+    const user = await getUserByEmail(req.user.email);
+    await rejectFriendRequest(user.id, friendId);
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Eliminar amigo
+app.delete('/api/friends/:friendId', authMiddleware, async (req, res) => {
+  try {
+    const { friendId } = req.params;
+    
+    if (!friendId) {
+      return res.status(400).json({ error: 'Friend ID required' });
+    }
+    
+    const user = await getUserByEmail(req.user.email);
+    await removeFriend(user.id, parseInt(friendId));
+    
+    const friends = await getFriends(user.id);
+    res.json({ friends });
+  } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Database error' });
   }

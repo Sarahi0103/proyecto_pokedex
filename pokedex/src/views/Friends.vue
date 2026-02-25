@@ -10,7 +10,9 @@ import { validateCode } from '../utils/validation'
 
 const router = useRouter()
 const friends = ref([])
+const pendingRequests = ref([])
 const loading = ref(true)
+const loadingRequests = ref(false)
 const myCode = ref('')
 const friendCode = ref('')
 const { request, loading: adding, error: networkError } = useNetworkRequest()
@@ -25,8 +27,13 @@ async function loadFriends(){
   
   loading.value = true
   try{
-    const data = await api('/api/friends')
-    friends.value = data.friends || []
+    const [friendsData, requestsData] = await Promise.all([
+      api('/api/friends'),
+      api('/api/friends/requests')
+    ])
+    
+    friends.value = friendsData.friends || []
+    pendingRequests.value = requestsData.requests || []
     
     const user = currentUser()
     myCode.value = user.code || ''
@@ -78,10 +85,11 @@ async function addFriend(){
   )
   
   if (result) {
-    console.log('✅ Amigo agregado:', result)
+    console.log('✅ Solicitud enviada:', result)
     friends.value = result.friends || []
     friendCode.value = ''
-    success('✓ Amigo agregado correctamente')
+    success('✓ Solicitud de amistad enviada')
+    loadFriends() // Recargar para actualizar solicitudes
   } else if (networkError.value) {
     if (networkError.value.includes('No autorizado') || networkError.value.includes('Unauthorized')) {
       showError('⚠️ Sesión expirada. Redirigiendo al login...')
@@ -92,6 +100,54 @@ async function addFriend(){
     } else {
       showError('✗ No se encontró usuario con ese código')
     }
+  }
+}
+
+async function acceptRequest(friendId) {
+  try {
+    const result = await api('/api/friends/accept', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ friendId })
+    })
+    
+    success('✓ Solicitud aceptada')
+    friends.value = result.friends || []
+    pendingRequests.value = pendingRequests.value.filter(r => r.id !== friendId)
+  } catch (e) {
+    showError('Error al aceptar solicitud')
+  }
+}
+
+async function rejectRequest(friendId) {
+  try {
+    await api('/api/friends/reject', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ friendId })
+    })
+    
+    success('Solicitud rechazada')
+    pendingRequests.value = pendingRequests.value.filter(r => r.id !== friendId)
+  } catch (e) {
+    showError('Error al rechazar solicitud')
+  }
+}
+
+async function removeFriend(friendId, friendName) {
+  if (!confirm(`¿Eliminar a ${friendName} de tus amigos?`)) {
+    return
+  }
+  
+  try {
+    const result = await api(`/api/friends/${friendId}`, {
+      method: 'DELETE'
+    })
+    
+    success(`✓ ${friendName} eliminado de tu lista`)
+    friends.value = result.friends || []
+  } catch (e) {
+    showError('Error al eliminar amigo')
   }
 }
 
@@ -146,8 +202,38 @@ onMounted(loadFriends)
         maxlength="10"
       />
       <button class="add-btn" @click="addFriend" :disabled="adding">
-        {{ adding ? 'Agregando...' : 'Agregar Amigo' }}
+        {{ adding ? 'Enviando solicitud...' : 'Enviar Solicitud' }}
       </button>
+    </div>
+
+    <!-- Pending Requests Section -->
+    <div v-if="pendingRequests.length > 0" class="pending-requests-card">
+      <h3>📨 Solicitudes Pendientes ({{ pendingRequests.length }})</h3>
+      <p class="requests-desc">Acepta o rechaza solicitudes de amistad</p>
+      
+      <div class="requests-grid">
+        <div 
+          v-for="request in pendingRequests" 
+          :key="request.id"
+          class="request-card"
+        >
+          <div class="request-avatar">
+            {{ (request.name || request.email || 'A')[0].toUpperCase() }}
+          </div>
+          <div class="request-info">
+            <div class="request-name">{{ request.name || 'Entrenador' }}</div>
+            <div class="request-code">🔖 {{ request.code }}</div>
+          </div>
+          <div class="request-actions">
+            <button class="btn-accept" @click="acceptRequest(request.id)">
+              ✓ Aceptar
+            </button>
+            <button class="btn-reject" @click="rejectRequest(request.id)">
+              ✗ Rechazar
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Friends List -->
@@ -194,6 +280,9 @@ onMounted(loadFriends)
             <div class="friend-actions">
               <button class="btn-challenge" @click="router.push(`/battle?friend=${friend.code}`)">
                 ⚔️ Desafiar
+              </button>
+              <button class="btn-remove" @click="removeFriend(friend.id, friend.name)">
+                🗑️ Eliminar
               </button>
             </div>
           </div>
@@ -639,6 +728,153 @@ onMounted(loadFriends)
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.5);
   background: linear-gradient(135deg, #FF5252 0%, #FF6B6B 100%);
+}
+
+.btn-remove{
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #9E9E9E 0%, #757575 100%);
+  color: white;
+  border: 2px solid #616161;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(117, 117, 117, 0.3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-remove:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 3px 12px rgba(117, 117, 117, 0.5);
+  background: linear-gradient(135deg, #757575 0%, #616161 100%);
+}
+
+/* Pending Requests Section */
+.pending-requests-card{
+  background: white;
+  border-radius: 20px;
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 3px solid #FF9800;
+}
+
+.pending-requests-card h3{
+  color: #FF9800;
+  font-weight: 900;
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.requests-desc{
+  color: #666;
+  margin: 0 0 20px 0;
+  font-size: 14px;
+}
+
+.requests-grid{
+  display: grid;
+  gap: 16px;
+}
+
+.request-card{
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+  border-radius: 12px;
+  border: 2px solid #FF9800;
+  transition: all 0.3s ease;
+}
+
+.request-card:hover{
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+.request-avatar{
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 900;
+  box-shadow: 0 3px 10px rgba(255, 152, 0, 0.4);
+  border: 3px solid white;
+}
+
+.request-info{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.request-name{
+  font-weight: 800;
+  font-size: 16px;
+  color: #222;
+  text-transform: capitalize;
+}
+
+.request-code{
+  color: #666;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.request-actions{
+  display: flex;
+  gap: 8px;
+}
+
+.btn-accept{
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+  color: white;
+  border: 2px solid #2E7D32;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(76, 175, 80, 0.3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-accept:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+}
+
+.btn-reject{
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #F44336 0%, #D32F2F 100%);
+  color: white;
+  border: 2px solid #C62828;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(244, 67, 54, 0.3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-reject:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.5);
+  background: linear-gradient(135deg, #D32F2F 0%, #C62828 100%);
 }
 
 @media (max-width: 768px){

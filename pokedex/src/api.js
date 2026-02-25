@@ -6,6 +6,9 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
 console.log('🔧 API_BASE configurado:', API_BASE);
 console.log('🔧 Variables de entorno:', import.meta.env);
 
+// Caché en memoria para Pokémon (optimización de rendimiento)
+const pokemonCache = new Map()
+
 export async function api(path, opts = {}){
   const headers = opts.headers || {};
   if(localStorage.token) headers['Authorization'] = 'Bearer ' + localStorage.token;
@@ -13,6 +16,13 @@ export async function api(path, opts = {}){
   const method = opts.method || 'GET';
   const fullUrl = API_BASE + path;
   const fetchOptions = Object.assign({ headers, credentials: 'include' }, opts);
+  
+  // Usar caché solo para GET de Pokémon
+  const isPokemonRequest = method === 'GET' && (path.startsWith('/api/pokemon') || path.includes('pokeapi'))
+  if (isPokemonRequest && pokemonCache.has(path)) {
+    console.log('📦 Usando caché para:', path)
+    return Promise.resolve(pokemonCache.get(path))
+  }
   
   try {
     const res = await fetch(fullUrl, fetchOptions);
@@ -35,7 +45,15 @@ export async function api(path, opts = {}){
     
     // Si la petición fue exitosa, devolver el resultado
     if (res.ok) {
-      return res.json();
+      const data = await res.json();
+      
+      // Guardar en caché si es petición GET de Pokémon
+      if (isPokemonRequest) {
+        pokemonCache.set(path, data)
+        console.log('💾 Guardado en caché:', path)
+      }
+      
+      return data;
     }
     
     // Si falla por otros motivos (400, 404, 500, etc.), lanzar error con el mensaje

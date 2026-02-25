@@ -182,7 +182,7 @@ async function getFriends(userId) {
     `SELECT u.id, u.name, u.email, u.code 
      FROM friends f 
      JOIN users u ON f.friend_id = u.id 
-     WHERE f.user_id = $1 
+     WHERE f.user_id = $1 AND f.status = 'accepted'
      ORDER BY f.created_at DESC`,
     [userId]
   );
@@ -191,14 +191,102 @@ async function getFriends(userId) {
 }
 
 async function addFriend(userId, friendId) {
-  // Agregar amistad bidireccional
+  // Agregar solicitud de amistad (solo del lado del usuario que envía)
+  // La otra persona recibirá la solicitud como "pending"
   await pool.query(
-    'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    `INSERT INTO friends (user_id, friend_id, status) 
+     VALUES ($1, $2, 'pending') 
+     ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'pending'`,
     [userId, friendId]
   );
+  return true;
+}
+
+async function getPendingFriendRequests(userId) {
+  // Obtener solicitudes pendientes recibidas
+  const result = await pool.query(
+    `SELECT u.id, u.name, u.email, u.code, f.created_at, f.id as friendship_id
+     FROM friends f 
+     JOIN users u ON f.user_id = u.id 
+     WHERE f.friend_id = $1 AND f.status = 'pending'
+     ORDER BY f.created_at DESC`,
+    [userId]
+  );
+  return result.rows;
+}
+
+async function acceptFriendRequest(userId, friendId) {
+  // Actualizar la solicitud a 'accepted'
   await pool.query(
-    'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    `UPDATE friends 
+     SET status = 'accepted' 
+     WHERE user_id = $1 AND friend_id = $2`,
     [friendId, userId]
+  );
+  
+  // Crear la relación bidireccional (el otro lado)
+  await pool.query(
+    `INSERT INTO friends (user_id, friend_id, status) 
+     VALUES ($1, $2, 'accepted') 
+     ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
+    [userId, friendId]
+  );
+  
+  return true;
+}
+
+async function rejectFriendRequest(userId, friendId) {
+  // Eliminar la solicitud rechazada
+  await pool.query(
+    'DELETE FROM friends WHERE user_id = $1 AND friend_id = $2',
+    [friendId, userId]
+  );
+  return true;
+}
+
+async function removeFriend(userId, friendId) {
+  // Eliminar amistad bidireccional
+  await pool.query(
+    'DELETE FROM friends WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
+    [userId, friendId]
+  );
+  return true;
+}
+
+// ============================================
+// PUSH SUBSCRIPTIONS
+// ============================================
+
+async function savePushSubscription(userId, subscription) {
+  await pool.query(
+    `INSERT INTO push_subscriptions (user_id, endpoint, keys_p256dh, keys_auth) 
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, endpoint) 
+     DO UPDATE SET keys_p256dh = $3, keys_auth = $4, updated_at = NOW()`,
+    [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
+  );
+  return true;
+}
+
+async function getPushSubscriptions(userId) {
+  const result = await pool.query(
+    'SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions WHERE user_id = $1',
+    [userId]
+  );
+  
+  return result.rows.map(row => ({
+    endpoint: row.endpoint,
+    keys: {
+      p256dh: row.keys_p256dh,
+      auth: row.keys_auth
+    }
+  }));
+}
+
+async function removePushSubscription(userId, endpoint) {
+  await pool.query(
+    'DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2',
+    [userId, endpoint]
   );
   return true;
 }
@@ -733,6 +821,14 @@ module.exports = {
   deleteTeam,
   getFriends,
   addFriend,
+  getPendingFriendRequests,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  removeFriend,
+  // Push Subscriptions
+  savePushSubscription,
+  getPushSubscriptions,
+  removePushSubscription,
   // Batallas
   createBattleChallenge,
   getPendingChallenges,
