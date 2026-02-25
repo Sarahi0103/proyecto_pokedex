@@ -1,6 +1,5 @@
 // Push Notifications Manager
 const webpush = require('web-push');
-const { getPushSubscriptions, removePushSubscription } = require('./db');
 
 // Configurar VAPID keys
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
@@ -21,29 +20,30 @@ if (vapidPublicKey && vapidPrivateKey) {
 
 /**
  * Enviar push notification a un usuario
+ * @param {Array} userSubs - Array de suscripciones del usuario
  */
-async function sendPushNotification(userId, payload) {
-  const userSubs = await getPushSubscriptions(userId);
+async function sendPushNotification(userSubs, payload) {
   
-  if (userSubs.length === 0) {
-    console.log(`📱 Sin suscripciones para usuario ${userId}`);
+  if (!userSubs || userSubs.length === 0) {
+    console.log(`📱 Sin suscripciones para este usuario`);
     return { success: false, message: 'No subscriptions found' };
   }
   
   const payloadString = JSON.stringify(payload);
   const results = [];
+  const invalidEndpoints = [];
   
   for (const subscription of userSubs) {
     try {
       await webpush.sendNotification(subscription, payloadString);
       results.push({ success: true, endpoint: subscription.endpoint });
-      console.log(`📤 Push enviado a usuario ${userId}`);
+      console.log(`📤 Push notification enviada`);
     } catch (error) {
       console.error(`❌ Error enviando push:`, error.message);
       
-      // Si la suscripción expiró o es inválida (410, 404), eliminarla
+      // Si la suscripción expiró o es inválida (410, 404), marcarla para eliminar
       if (error.statusCode === 410 || error.statusCode === 404) {
-        await removePushSubscription(userId, subscription.endpoint);
+        invalidEndpoints.push(subscription.endpoint);
       }
       
       results.push({ 
@@ -56,15 +56,16 @@ async function sendPushNotification(userId, payload) {
   
   return { 
     success: results.some(r => r.success), 
-    results 
+    results,
+    invalidEndpoints
   };
 }
 
 /**
- * Enviar notificación de invitación de amistad
+ * Crear payload de notificación de invitación de amistad
  */
-async function sendFriendRequestNotification(userId, friendName) {
-  const payload = {
+function createFriendRequestPayload(friendName) {
+  return {
     title: '👥 Nueva solicitud de amistad',
     body: `${friendName} quiere ser tu amigo en Pokedex!`,
     icon: '/icons/icon-192.png',
@@ -75,15 +76,13 @@ async function sendFriendRequestNotification(userId, friendName) {
       url: '/friends'
     }
   };
-  
-  return await sendPushNotification(userId, payload);
 }
 
 /**
- * Enviar notificación de reto de batalla
+ * Crear payload de notificación de reto de batalla
  */
-async function sendBattleChallengeNotification(userId, challengerName, battleId) {
-  const payload = {
+function createBattleChallengePayload(challengerName, battleId) {
+  return {
     title: '⚔️ Nuevo reto de batalla',
     body: `${challengerName} te ha retado a una batalla!`,
     icon: '/icons/icon-192.png',
@@ -105,15 +104,13 @@ async function sendBattleChallengeNotification(userId, challengerName, battleId)
       }
     ]
   };
-  
-  return await sendPushNotification(userId, payload);
 }
 
 /**
- * Enviar notificación de batalla aceptada
+ * Crear payload de notificación de batalla aceptada
  */
-async function sendBattleAcceptedNotification(userId, opponentName, battleId) {
-  const payload = {
+function createBattleAcceptedPayload(opponentName, battleId) {
+  return {
     title: '⚔️ Batalla aceptada',
     body: `${opponentName} ha aceptado tu desafío!`,
     icon: '/icons/icon-192.png',
@@ -125,15 +122,13 @@ async function sendBattleAcceptedNotification(userId, opponentName, battleId) {
       url: `/battle?id=${battleId}`
     }
   };
-  
-  return await sendPushNotification(userId, payload);
 }
 
 /**
- * Enviar notificación de amistad aceptada
+ * Crear payload de notificación de amistad aceptada
  */
-async function sendFriendAcceptedNotification(userId, friendName) {
-  const payload = {
+function createFriendAcceptedPayload(friendName) {
+  return {
     title: '✅ Solicitud aceptada',
     body: `${friendName} aceptó tu solicitud de amistad!`,
     icon: '/icons/icon-192.png',
@@ -144,16 +139,14 @@ async function sendFriendAcceptedNotification(userId, friendName) {
       url: '/friends'
     }
   };
-  
-  return await sendPushNotification(userId, payload);
 }
 
 module.exports = {
   sendPushNotification,
-  sendFriendRequestNotification,
-  sendBattleChallengeNotification,
-  sendBattleAcceptedNotification,
-  sendFriendAcceptedNotification,
+  createFriendRequestPayload,
+  createBattleChallengePayload,
+  createBattleAcceptedPayload,
+  createFriendAcceptedPayload,
   getVapidPublicKey: () => vapidPublicKey
 };
 
