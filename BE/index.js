@@ -62,8 +62,11 @@ const allowedOrigins = [
   'http://localhost:3001', 
   'http://localhost:5173', 
   'http://localhost:5174',
+  'https://pokedex-frontend-yi14.onrender.com', // Frontend en Render
   process.env.FRONTEND_URL
 ].filter(Boolean); // Elimina valores undefined
+
+console.log('🔧 CORS - Orígenes permitidos:', allowedOrigins);
 
 const io = new Server(server, {
   cors: {
@@ -75,12 +78,26 @@ const io = new Server(server, {
 // CORS configuration for OAuth
 const corsOptions = {
   origin: (origin, callback) => {
+    // Log para debug
+    console.log('🔍 CORS - Request origin:', origin);
+    
     // Permitir requests sin origin (mobile apps, postman, etc.) en desarrollo
-    if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true);
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      console.log('✅ CORS - Permitiendo request sin origin (desarrollo)');
+      return callback(null, true);
+    }
+    
+    // En producción, permitir dominios de Render.com
+    if (origin && origin.includes('.onrender.com')) {
+      console.log('✅ CORS - Permitiendo dominio de Render');
+      return callback(null, true);
+    }
     
     if (!origin || allowedOrigins.includes(origin)) {
+      console.log('✅ CORS - Origin permitido');
       callback(null, true);
     } else {
+      console.log('❌ CORS - Origin NO permitido:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },

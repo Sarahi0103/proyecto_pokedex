@@ -68,16 +68,16 @@ onMounted(() => {
 
 <template>
   <div class="push-notifications-toggle">
-    <div v-if="!isSupported" class="notification-warning">
-      <p>⚠️ Las notificaciones push no están disponibles en este navegador</p>
-    </div>
-    
-    <div v-else class="notification-controls">
+    <!-- Siempre mostrar el componente -->
+    <div class="notification-controls">
       <div class="notification-info">
         <div class="icon">🔔</div>
         <div class="text-content">
           <h3>Notificaciones Push</h3>
-          <p v-if="isSubscribed" class="status active">
+          <p v-if="!isSupported" class="status warning">
+            ⚠️ Tu navegador no soporta notificaciones push
+          </p>
+          <p v-else-if="isSubscribed" class="status active">
             ✅ Activadas - Recibirás notificaciones sobre invitaciones de amistad y retos de batalla
           </p>
           <p v-else class="status inactive">
@@ -86,7 +86,7 @@ onMounted(() => {
         </div>
       </div>
       
-      <div class="notification-actions">
+      <div class="notification-actions" v-if="isSupported">
         <button 
           v-if="!isSubscribed"
           @click="handleSubscribe"

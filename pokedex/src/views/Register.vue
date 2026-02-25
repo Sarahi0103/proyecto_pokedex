@@ -36,11 +36,18 @@ async function submit(){
   
   const result = await request(
     async () => {
-      const res = await fetch((import.meta.env.VITE_API_BASE||'http://localhost:4000') + '/auth/register', { 
+      const res = await fetch(API_BASE + '/auth/register', { 
         method: 'POST', 
         headers:{'Content-Type':'application/json'}, 
         body: JSON.stringify({ email: email.value, password: password.value, name: name.value }) 
       })
+      
+      // Verificar si la respuesta es HTML en lugar de JSON
+      const contentType = res.headers.get('content-type')
+      if (contentType && contentType.includes('text/html')) {
+        throw new Error('Error de comunicación con el servidor. El backend no está respondiendo correctamente.')
+      }
+      
       const data = await res.json()
       
       if(!res.ok) {

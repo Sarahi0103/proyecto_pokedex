@@ -58,10 +58,7 @@ services:
     staticPublishPath: ./pokedex/dist
     envVars:
       - key: VITE_API_BASE
-        fromService:
-          type: web
-          name: pokedex-backend
-          property: host
+        value: https://pokedex-backend-rzjl.onrender.com
     headers:
       - path: /*
         name: X-Frame-Options

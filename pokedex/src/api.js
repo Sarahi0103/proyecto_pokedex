@@ -2,6 +2,10 @@ import { saveOfflineRequest } from './main.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
 
+// Debug: Mostrar la URL del API en consola
+console.log('🔧 API_BASE configurado:', API_BASE);
+console.log('🔧 Variables de entorno:', import.meta.env);
+
 export async function api(path, opts = {}){
   const headers = opts.headers || {};
   if(localStorage.token) headers['Authorization'] = 'Bearer ' + localStorage.token;
@@ -12,6 +16,15 @@ export async function api(path, opts = {}){
   
   try {
     const res = await fetch(fullUrl, fetchOptions);
+    
+    // Verificar si la respuesta es HTML (error común cuando hay problemas de CORS o configuración)
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('text/html')) {
+      console.error('❌ El servidor devolvió HTML en lugar de JSON. Probablemente hay un error de configuración.');
+      console.error('URL solicitada:', fullUrl);
+      console.error('API_BASE configurado:', API_BASE);
+      throw new Error('Error de comunicación con el servidor. Verifica que el backend esté funcionando correctamente.');
+    }
     
     // Si hay error de autenticación (401), no intentar offline
     if (res.status === 401) {
