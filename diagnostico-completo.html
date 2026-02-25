@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico Completo - Pokédex</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        
+        h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .status-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #ccc;
+        }
+        
+        .status-box.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .status-box.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .status-box.warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 5px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .detail-value {
+            color: #333;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .code-display {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .badge.success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .badge.error {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .badge.warning {
+            background: #ffc107;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🔍 Diagnóstico Completo del Sistema</h1>
+            <p style="color: #666; margin-bottom: 20px;">
+                Esta herramienta verifica el estado de tu sistema y te ayuda a solucionar problemas.
+            </p>
+            
+            <div class="action-buttons">
+                <button onclick="runDiagnostic()">🔍 Ejecutar Diagnóstico</button>
+                <button onclick="fixUserCodes()">🔧 Arreglar Códigos</button>
+                <button onclick="runMigration()">📦 Ejecutar Migración</button>
+            </div>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+    
+    <script>
+        const API_BASE = 'https://pokedex-backend-rzjl.onrender.com';
+        
+        function showLoading() {
+            document.getElementById('results').innerHTML = `
+                <div class="card">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 15px; color: #666;">Ejecutando diagnóstico...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function runDiagnostic() {
+            showLoading();
+            
+            try {
+                // Primero intentar sin auth para ver estado general
+                const generalCheck = await fetch(`${API_BASE}/api/fix-user-codes`);
+                const generalData = await generalCheck.json();
+                
+                let html = '<div class="card">';
+                html += '<h2>📊 Estado del Sistema</h2>';
+                
+                // Usuario y códigos
+                html += '<div class="status-box ' + (generalData.success ? 'success' : 'error') + '">';
+                html += '<h3>👥 Códigos de Usuario</h3>';
+                if (generalData.success) {
+                    html += `<p><strong>✅ Usuarios con código:</strong> ${generalData.allUsers.length}</p>`;
+                    html += `<p><strong>🔧 Usuarios reparados:</strong> ${generalData.usersFixed}</p>`;
+                    
+                    if (generalData.allUsers.length > 0) {
+                        html += '<details style="margin-top: 10px;"><summary style="cursor: pointer; font-weight: bold;">Ver todos los usuarios</summary>';
+                        html += '<div class="code-display">';
+                        generalData.allUsers.forEach(u => {
+                            html += `${u.email}: ${u.code}\n`;
+                        });
+                        html += '</div></details>';
+                    }
+                } else {
+                    html += `<p>❌ Error: ${generalData.error}</p>`;
+                }
+                html += '</div>';
+                
+                // Verificar migración
+                try {
+                    const migrationCheck = await fetch(`${API_BASE}/api/run-migration`);
+                    const migrationData = await migrationCheck.json();
+                    
+                    html += '<div class="status-box ' + (migrationData.success ? 'success' : 'warning') + '">';
+                    html += '<h3>📦 Base de Datos</h3>';
+                    html += `<p>${migrationData.message}</p>`;
+                    html += '</div>';
+                } catch (e) {
+                    html += '<div class="status-box error">';
+                    html += '<h3>📦 Base de Datos</h3>';
+                    html += '<p>⚠️ No se pudo verificar la migración</p>';
+                    html += '</div>';
+                }
+                
+                // Instrucciones
+                html += '<div class="status-box warning">';
+                html += '<h3>⚡ Siguiente Paso</h3>';
+                html += '<p>Para verificar el estado de las notificaciones push:</p>';
+                html += '<ol style="margin-left: 20px; margin-top: 10px;">';
+                html += '<li>Inicia sesión en la app</li>';
+                html += '<li>Abre esta URL en otra pestaña (debes estar autenticado):</li>';
+                html += `<li><a href="${API_BASE}/api/debug/push-status" target="_blank" style="color: #667eea;">Ver Estado de Push Notifications</a></li>`;
+                html += '</ol>';
+                html += '</div>';
+                
+                html += '</div>';
+                
+                document.getElementById('results').innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="card">
+                        <div class="status-box error">
+                            <h3>❌ Error de Conexión</h3>
+                            <p>${error.message}</p>
+                            <p style="margin-top: 10px;">¿El backend está desplegado en Render?</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function fixUserCodes() {
+            showLoading();
+            try {
+                const response = await fetch(`${API_BASE}/api/fix-user-codes`);
+                const data = await response.json();
+                
+                let html = '<div class="card">';
+                html += '<h2>🔧 Reparación de Códigos</h2>';
+                
+                if (data.success) {
+                    html += '<div class="status-box success">';
+                    html += `<h3>✅ ¡Reparación Exitosa!</h3>`;
+                    html += `<p><strong>Usuarios reparados:</strong> ${data.usersFixed}</p>`;
+                    
+                    if (data.fixedDetails.length > 0) {
+                        html += '<div class="code-display">';
+                        data.fixedDetails.forEach(f => {
+                            html += `${f.email} → ${f.newCode}\n`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    html += '<p style="margin-top: 15px;">✅ Ahora cierra sesión y vuelve a entrar para ver tu código.</p>';
+                } else {
+                    html += '<div class="status-box error">';
+                    html += `<h3>❌ Error</h3>`;
+                    html += `<p>${data.error}</p>`;
+                }
+                
+                html += '</div></div>';
+                document.getElementById('results').innerHTML = html;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="card">
+                        <div class="status-box error">
+                            <h3>❌ Error</h3>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function runMigration() {
+            showLoading();
+            try {
+                const response = await fetch(`${API_BASE}/api/run-migration`);
+                const data = await response.json();
+                
+                let html = '<div class="card">';
+                html += '<h2>📦 Migración de Base de Datos</h2>';
+                
+                if (data.success) {
+                    html += '<div class="status-box success">';
+                    html += `<h3>✅ Migración Completada</h3>`;
+                    html += `<p>${data.message}</p>`;
+                    html += '<p style="margin-top: 10px;">✅ Las notificaciones push están listas para usarse.</p>';
+                } else {
+                    html += '<div class="status-box warning">';
+                    html += `<h3>⚠️ ${data.message}</h3>`;
+                    html += '<p>Es posible que la migración ya se haya ejecutado antes.</p>';
+                }
+                
+                html += '</div></div>';
+                document.getElementById('results').innerHTML = html;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="card">
+                        <div class="status-box error">
+                            <h3>❌ Error</h3>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Ejecutar diagnóstico automáticamente al cargar
+        window.onload = () => {
+            runDiagnostic();
+        };
+    </script>
+</body>
+</html>

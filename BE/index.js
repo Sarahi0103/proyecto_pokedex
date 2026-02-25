@@ -1202,6 +1202,74 @@ app.get('/api/fix-user-codes', async (req, res) => {
   }
 });
 
+// 🔍 ENDPOINT DE DIAGNÓSTICO DE NOTIFICACIONES PUSH
+app.get('/api/debug/push-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserByEmail(req.user.email);
+    
+    // Verificar si la tabla push_subscriptions existe
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'push_subscriptions'
+      );
+    `);
+    
+    const tableExists = tableCheck.rows[0].exists;
+    
+    // Si la tabla existe, obtener suscripciones del usuario
+    let subscriptions = [];
+    if (tableExists) {
+      const subs = await getPushSubscriptions(user.id);
+      subscriptions = subs.map(s => ({
+        endpoint: s.endpoint.substring(0, 50) + '...',
+        created: s.created_at
+      }));
+    }
+    
+    // Verificar si la columna status existe en friends
+    const statusCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_name = 'friends' AND column_name = 'status'
+      );
+    `);
+    
+    const statusColumnExists = statusCheck.rows[0].exists;
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        code: user.code
+      },
+      database: {
+        push_subscriptions_table_exists: tableExists,
+        friends_status_column_exists: statusColumnExists,
+        migration_needed: !tableExists || !statusColumnExists
+      },
+      push_notifications: {
+        subscriptions_count: subscriptions.length,
+        subscriptions: subscriptions,
+        status: subscriptions.length > 0 ? 'ACTIVO' : 'NO SUSCRITO'
+      },
+      vapid: {
+        configured: !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY,
+        public_key_set: !!process.env.VAPID_PUBLIC_KEY
+      }
+    });
+  } catch (e) {
+    console.error('Debug push status error:', e);
+    res.status(500).json({ 
+      success: false,
+      error: 'Error al verificar estado',
+      details: e.message 
+    });
+  }
+});
+
 // Configurar Socket.io para batallas en tiempo real
 setupBattleSocket(io);
 
