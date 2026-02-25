@@ -314,37 +314,64 @@ async function removeFriend(userId, friendId) {
 // ============================================
 
 async function savePushSubscription(userId, subscription) {
-  await pool.query(
-    `INSERT INTO push_subscriptions (user_id, endpoint, keys_p256dh, keys_auth) 
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (user_id, endpoint) 
-     DO UPDATE SET keys_p256dh = $3, keys_auth = $4, updated_at = NOW()`,
-    [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
-  );
-  return true;
+  try {
+    await pool.query(
+      `INSERT INTO push_subscriptions (user_id, endpoint, keys_p256dh, keys_auth) 
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, endpoint) 
+       DO UPDATE SET keys_p256dh = $3, keys_auth = $4, updated_at = NOW()`,
+      [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
+    );
+    return true;
+  } catch (error) {
+    // Si la tabla no existe, solo registrar en consola pero no fallar
+    if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Tabla push_subscriptions no existe. Ejecuta la migración para habilitar notificaciones push.');
+      return false;
+    }
+    throw error;
+  }
 }
 
 async function getPushSubscriptions(userId) {
-  const result = await pool.query(
-    'SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions WHERE user_id = $1',
-    [userId]
-  );
-  
-  return result.rows.map(row => ({
-    endpoint: row.endpoint,
-    keys: {
-      p256dh: row.keys_p256dh,
-      auth: row.keys_auth
+  try {
+    const result = await pool.query(
+      'SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions WHERE user_id = $1',
+      [userId]
+    );
+    
+    return result.rows.map(row => ({
+      endpoint: row.endpoint,
+      keys: {
+        p256dh: row.keys_p256dh,
+        auth: row.keys_auth
+      }
+    }));
+  } catch (error) {
+    // Si la tabla no existe, devolver array vacío
+    if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Tabla push_subscriptions no existe, devolviendo array vacío');
+      return [];
     }
-  }));
+    throw error;
+  }
 }
 
 async function removePushSubscription(userId, endpoint) {
-  await pool.query(
-    'DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2',
-    [userId, endpoint]
-  );
-  return true;
+  try {
+    await pool.query(
+      'DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2',
+      [userId, endpoint]
+    );
+    return true;
+  } catch (error) {
+    // Si la tabla no existe, no hacer nada
+    if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Tabla push_subscriptions no existe');
+      return false;
+    }
+    throw error;
+  }
 }
 
 // ============================================
