@@ -204,6 +204,61 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Endpoint temporal para inicializar la base de datos (solo para plan gratuito de Render)
+// IMPORTANTE: Eliminar este endpoint después de usarlo por seguridad
+app.get('/api/init-database-setup', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { Pool } = require('pg');
+    
+    // Leer schema.sql
+    const schemaPath = path.join(__dirname, 'database', 'schema.sql');
+    const schema = fs.readFileSync(schemaPath, 'utf-8');
+    
+    // Crear pool temporal
+    const pool = new Pool(
+      process.env.DATABASE_URL
+        ? {
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
+          }
+        : {
+            host: process.env.DB_HOST || 'localhost',
+            port: process.env.DB_PORT || 5432,
+            database: process.env.DB_NAME || 'pokedex',
+            user: process.env.DB_USER || 'postgres',
+            password: process.env.DB_PASSWORD || '123',
+          }
+    );
+    
+    // Ejecutar schema
+    await pool.query(schema);
+    
+    // Verificar tablas creadas
+    const result = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      ORDER BY table_name;
+    `);
+    
+    await pool.end();
+    
+    res.json({
+      success: true,
+      message: 'Base de datos inicializada correctamente',
+      tables: result.rows.map(r => r.table_name)
+    });
+  } catch (error) {
+    console.error('Error al inicializar base de datos:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Auth
 app.post('/auth/register', authLimiter, async (req,res)=>{
   try{
