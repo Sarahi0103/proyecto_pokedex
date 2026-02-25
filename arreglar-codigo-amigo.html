@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arreglar Código de Amigo - Pokédex</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .step h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .step p {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .result.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .final-step {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+            margin-top: 30px;
+        }
+        
+        .final-step h3 {
+            color: #856404;
+        }
+        
+        .final-step ul {
+            color: #856404;
+            margin-left: 20px;
+            line-height: 2;
+        }
+        
+        .code-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Arreglar Código de Amigo</h1>
+        <p class="subtitle">Solución automática para el problema del código que no aparece</p>
+        
+        <div class="step">
+            <h3>Paso 1: Arreglar Códigos de Usuario</h3>
+            <p>Este paso asignará códigos a todos los usuarios que no tengan uno.</p>
+            <button id="btn-fix-codes" onclick="fixUserCodes()">
+                ▶️ Ejecutar Paso 1
+            </button>
+            <div id="result-fix-codes" class="result"></div>
+        </div>
+        
+        <div class="step">
+            <h3>Paso 2: Ejecutar Migración</h3>
+            <p>Este paso crea las tablas necesarias para notificaciones push y solicitudes de amistad.</p>
+            <button id="btn-migration" onclick="runMigration()" disabled>
+                ▶️ Ejecutar Paso 2
+            </button>
+            <div id="result-migration" class="result"></div>
+        </div>
+        
+        <div class="step final-step">
+            <h3>Paso 3: Finalizar</h3>
+            <ul>
+                <li>Cierra sesión en tu app</li>
+                <li>Vuelve a iniciar sesión</li>
+                <li>Ve a "Agregar Amigos"</li>
+                <li>¡Tu código debería aparecer!</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'https://pokedex-backend-rzjl.onrender.com';
+        
+        function showResult(elementId, message, type, data = null) {
+            const element = document.getElementById(elementId);
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+            
+            let html = message;
+            if (data) {
+                html += `<div class="code-display">${JSON.stringify(data, null, 2)}</div>`;
+            }
+            
+            element.innerHTML = html;
+        }
+        
+        async function fixUserCodes() {
+            const btn = document.getElementById('btn-fix-codes');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Ejecutando...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/fix-user-codes`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(
+                        'result-fix-codes',
+                        `✅ ¡Éxito! Se arreglaron ${data.usersFixed} usuarios.`,
+                        'success',
+                        data
+                    );
+                    
+                    // Habilitar botón siguiente
+                    document.getElementById('btn-migration').disabled = false;
+                } else {
+                    showResult(
+                        'result-fix-codes',
+                        `❌ Error: ${data.error || 'Error desconocido'}`,
+                        'error',
+                        data
+                    );
+                    btn.disabled = false;
+                    btn.innerHTML = '🔄 Reintentar Paso 1';
+                }
+            } catch (error) {
+                showResult(
+                    'result-fix-codes',
+                    `❌ Error de conexión: ${error.message}. ¿El backend está desplegado?`,
+                    'error'
+                );
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Reintentar Paso 1';
+            }
+        }
+        
+        async function runMigration() {
+            const btn = document.getElementById('btn-migration');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Ejecutando migración...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/run-migration`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(
+                        'result-migration',
+                        `✅ ¡Migración completada! Ahora puedes cerrar sesión y volver a entrar.`,
+                        'success',
+                        data
+                    );
+                } else {
+                    showResult(
+                        'result-migration',
+                        `⚠️ Posible error: ${data.error || data.message}`,
+                        'info',
+                        data
+                    );
+                }
+            } catch (error) {
+                showResult(
+                    'result-migration',
+                    `❌ Error: ${error.message}`,
+                    'error'
+                );
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Reintentar Paso 2';
+            }
+        }
+    </script>
+</body>
+</html>
