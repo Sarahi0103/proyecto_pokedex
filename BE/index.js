@@ -43,7 +43,8 @@ const {
   getBattleActions,
   finalizeBattle,
   executeBattle,
-  getUserBattleHistory
+  getUserBattleHistory,
+  pool
 } = require('./lib/db');
 
 const { setupBattleSocket, notifyUser } = require('./lib/battle-socket');
