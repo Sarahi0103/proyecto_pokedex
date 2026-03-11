@@ -139,19 +139,26 @@ async function addFriend(){
   )
   
   if (result) {
-    console.log('✅ Solicitud enviada:', result)
+    console.log('✅ Respuesta del servidor:', result)
     friendCode.value = ''
     
     // Recargar INMEDIATAMENTE todas las listas
     console.log('🔄 Recargando todas las listas (amigos, pendientes, enviadas)...')
     try {
+      // Pequeña pausa para asegurar que el servidor procesó todo
+      await new Promise(resolve => setTimeout(resolve, 500))
       await loadFriends()
       console.log('✅ Listas recargadas exitosamente')
+      console.log('📊 Estado actual:', {
+        amigos: friends.value.length,
+        pendientes: pendingRequests.value.length,
+        enviadas: sentRequests.value.length
+      })
       success('✓ Solicitud de amistad enviada. El receptor será notificado.')
     } catch (loadError) {
       console.error('❌ Error recargando listas:', loadError)
       // Mostrar mensaje de éxito de todas formas
-      success('✓ Solicitud enviada (refresca para ver cambios)')
+      success('✓ Solicitud enviada. Recarga la página para ver los cambios.')
     }
   } else if (networkError.value) {
     if (networkError.value.includes('No autorizado') || networkError.value.includes('Unauthorized')) {
@@ -167,6 +174,9 @@ async function addFriend(){
 }
 
 async function acceptRequest(friendId) {
+  console.log('✅ Aceptando solicitud de usuario ID:', friendId)
+  loadingRequests.value = true
+  
   try {
     const result = await api('/api/friends/accept', {
       method: 'POST',
@@ -174,14 +184,22 @@ async function acceptRequest(friendId) {
       body: JSON.stringify({ friendId })
     })
     
+    console.log('✅ Solicitud aceptada, respuesta:', result)
     success('✓ Solicitud aceptada')
     
-    // Actualizar TODAS las listas inmediatamente
+    // Actualizar TODAS las listas inmediatamente con loading pause pequeña para asegurar que el servidor procesó todo
     console.log('🔄 Recargando listas después de aceptar...')
+    await new Promise(resolve => setTimeout(resolve, 500))
     await loadFriends()
-    console.log('✅ Listas actualizadas')
+    console.log('✅ Listas actualizadas:', {
+      amigos: friends.value.length,
+      pendientes: pendingRequests.value.length
+    })
   } catch (e) {
+    console.error('❌ Error al aceptar:', e)
     showError('Error al aceptar solicitud')
+  } finally {
+    loadingRequests.value = false
   }
 }
 
