@@ -119,13 +119,28 @@ export function usePushNotifications() {
       // Enviar suscripción al servidor
       const token = localStorage.getItem('token');
       if (!token) {
+        console.error('❌ No hay token de autenticación');
         throw new Error('Not authenticated');
       }
 
-      await api('/api/push/subscribe', 'POST', { subscription: sub });
+      // Convertir suscripción a formato JSON serializable
+      const subscriptionJSON = sub.toJSON();
+      
+      console.log('📤 Enviando suscripción al servidor...');
+      console.log('📦 Datos de suscripción:', {
+        endpoint: subscriptionJSON.endpoint.substring(0, 50) + '...',
+        keys: Object.keys(subscriptionJSON.keys)
+      });
 
+      const response = await api('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: subscriptionJSON })
+      });
+
+      console.log('✅ Respuesta del servidor:', response);
       isSubscribed.value = true;
-      console.log('✅ Suscrito a push notifications');
+      console.log('✅ Suscrito a push notifications correctamente');
 
       return sub;
     } catch (err) {

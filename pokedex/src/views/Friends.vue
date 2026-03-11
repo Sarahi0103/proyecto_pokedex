@@ -92,7 +92,11 @@ async function addFriend(){
     friends.value = result.friends || []
     friendCode.value = ''
     success('✓ Solicitud de amistad enviada')
-    loadFriends() // Recargar para actualizar solicitudes enviadas
+    
+    // Recargar INMEDIATAMENTE todas las listas para mostrar la solicitud enviada
+    console.log('🔄 Recargando listas de amigos...')
+    await loadFriends()
+    console.log('✅ Listas actualizadas')
   } else if (networkError.value) {
     if (networkError.value.includes('No autorizado') || networkError.value.includes('Unauthorized')) {
       showError('⚠️ Sesión expirada. Redirigiendo al login...')
@@ -115,8 +119,11 @@ async function acceptRequest(friendId) {
     })
     
     success('✓ Solicitud aceptada')
-    friends.value = result.friends || []
-    pendingRequests.value = pendingRequests.value.filter(r => r.id !== friendId)
+    
+    // Actualizar TODAS las listas inmediatamente
+    console.log('🔄 Recargando listas después de aceptar...')
+    await loadFriends()
+    console.log('✅ Listas actualizadas')
   } catch (e) {
     showError('Error al aceptar solicitud')
   }
