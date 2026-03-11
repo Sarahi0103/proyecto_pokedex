@@ -208,6 +208,13 @@ export function usePushNotifications() {
   // Auto-suscribirse (silencioso, sin mostrar errores al usuario)
   async function autoSubscribe() {
     try {
+      console.log('🔔 autoSubscribe() iniciado');
+      console.log('📊 Estado actual:', {
+        isSubscribed: isSubscribed.value,
+        permission: Notification.permission,
+        hasToken: !!localStorage.getItem('token')
+      });
+      
       // Verificar si ya está suscrito
       if (isSubscribed.value) {
         console.log('📱 Ya está suscrito, no es necesario suscribirse nuevamente');
@@ -223,19 +230,30 @@ export function usePushNotifications() {
       // Verificar si ya tiene permiso concedido
       if (Notification.permission === 'granted') {
         console.log('✅ Permiso ya concedido, suscribiendo automáticamente...');
-        await subscribe();
-        return true;
+        try {
+          await subscribe();
+          return true;
+        } catch (subError) {
+          console.error('❌ Error al suscribirse:', subError);
+          return false;
+        }
       }
 
       // Si el permiso está en "default", solicitarlo automáticamente
       if (Notification.permission === 'default') {
         console.log('📱 Solicitando permiso de notificaciones...');
         const permission = await Notification.requestPermission();
+        console.log('📋 Permiso resultado:', permission);
         
         if (permission === 'granted') {
           console.log('✅ Permiso concedido, suscribiendo...');
-          await subscribe();
-          return true;
+          try {
+            await subscribe();
+            return true;
+          } catch (subError) {
+            console.error('❌ Error al suscribirse después de conceder permiso:', subError);
+            return false;
+          }
         } else if (permission === 'denied') {
           console.info('ℹ️ Usuario denegó permisos de notificación');
           return false;
@@ -252,6 +270,7 @@ export function usePushNotifications() {
     } catch (err) {
       // Silenciar errores para no interrumpir la experiencia del usuario
       console.warn('⚠️ No se pudo auto-suscribir a notificaciones:', err.message);
+      console.error('Error completo:', err);
       return false;
     }
   }

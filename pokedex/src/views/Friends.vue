@@ -89,14 +89,19 @@ async function addFriend(){
   
   if (result) {
     console.log('✅ Solicitud enviada:', result)
-    friends.value = result.friends || []
     friendCode.value = ''
-    success('✓ Solicitud de amistad enviada')
     
-    // Recargar INMEDIATAMENTE todas las listas para mostrar la solicitud enviada
+    // Recargar INMEDIATAMENTE todas las listas
     console.log('🔄 Recargando listas de amigos...')
-    await loadFriends()
-    console.log('✅ Listas actualizadas')
+    try {
+      await loadFriends()
+      console.log('✅ Listas actualizadas exitosamente')
+      success('✓ Solicitud de amistad enviada')
+    } catch (loadError) {
+      console.error('❌ Error recargando listas:', loadError)
+      // Mostrar mensaje de éxito de todas formas
+      success('✓ Solicitud enviada (refresca para ver cambios)')
+    }
   } else if (networkError.value) {
     if (networkError.value.includes('No autorizado') || networkError.value.includes('Unauthorized')) {
       showError('⚠️ Sesión expirada. Redirigiendo al login...')
