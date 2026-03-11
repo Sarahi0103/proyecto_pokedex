@@ -500,32 +500,52 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
   try {
     const { subscription } = req.body;
     
-    console.log('📱 Solicitud de suscripción recibida');
-    console.log('📦 Datos de suscripción:', JSON.stringify(subscription, null, 2));
+    console.log('\n======================================')
+    console.log('📱 NUEVA SOLICITUD DE SUSCRIPCIÓN PUSH')
+    console.log('======================================')
+    console.log('🔐 Usuario:', req.user.email)
+    console.log('📦 Body completo:', JSON.stringify(req.body, null, 2))
+    console.log('📍 Subscription object:', JSON.stringify(subscription, null, 2))
     
     if (!subscription || !subscription.endpoint) {
-      console.error('❌ Datos de suscripción inválidos');
+      console.error('❌ ERROR: Datos de suscripción inválidos')
+      console.log('   - subscription:', subscription)
+      console.log('   - endpoint:', subscription?.endpoint)
       return res.status(400).json({ error: 'Subscription data required' });
     }
     
-    const user = await getUserByEmail(req.user.email);
-    console.log(`👤 Usuario: ${user.name} (${user.email})`);
+    console.log('✅ Datos de suscripción válidos')
+    console.log('🔍 Buscando usuario en BD...')
     
+    const user = await getUserByEmail(req.user.email);
+    console.log(`👤 Usuario encontrado: ${user.name} (ID: ${user.id})`)
+    
+    console.log('💾 Guardando suscripción en la base de datos...')
     const saved = await savePushSubscription(user.id, subscription);
     
     if (saved) {
-      console.log(`✅ Usuario ${user.name} suscrito a push notifications`);
+      console.log('✅✅✅ SUSCRIPCIÓN GUARDADA EXITOSAMENTE')
+      console.log(`   - Usuario: ${user.name}`)
+      console.log(`   - Email: ${user.email}`)
+      console.log(`   - Endpoint: ${subscription.endpoint.substring(0, 60)}...`)
+      console.log('======================================\n')
       
       res.json({ 
         success: true, 
-        message: 'Subscribed to push notifications successfully' 
+        message: 'Subscribed to push notifications successfully',
+        userId: user.id,
+        userEmail: user.email
       });
     } else {
-      console.error('⚠️  No se pudo guardar la suscripción');
+      console.error('⚠️⚠️⚠️ ERROR: No se pudo guardar la suscripción')
+      console.log('======================================\n')
       res.status(500).json({ error: 'Failed to save subscription' });
     }
   } catch (err) {
-    console.error('[Push] Subscription error:', err);
+    console.error('❌❌❌ ERROR CRÍTICO EN /api/push/subscribe')
+    console.error('Error:', err.message)
+    console.error('Stack:', err.stack)
+    console.log('======================================\n')
     res.status(500).json({ error: 'Subscription error' });
   }
 });

@@ -205,7 +205,7 @@ export function usePushNotifications() {
     }
   }
 
-  // Auto-suscribirse (silencioso, sin mostrar errores al usuario)
+  // Auto-suscribirse (agresivo, con reintentos)
   async function autoSubscribe() {
     try {
       console.log('🔔 autoSubscribe() iniciado');
@@ -214,6 +214,13 @@ export function usePushNotifications() {
         permission: Notification.permission,
         hasToken: !!localStorage.getItem('token')
       });
+      
+      // Verificar token primero
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('⏳ No hay token, esperando autenticación...');
+        return false;
+      }
       
       // Verificar si ya está suscrito
       if (isSubscribed.value) {
@@ -227,14 +234,21 @@ export function usePushNotifications() {
         return false;
       }
 
+      // Esperar a que el Service Worker esté ready
+      console.log('⏳ Esperando Service Worker...');
+      const registration = await navigator.serviceWorker.ready;
+      console.log('✅ Service Worker ready:', registration.scope);
+
       // Verificar si ya tiene permiso concedido
       if (Notification.permission === 'granted') {
         console.log('✅ Permiso ya concedido, suscribiendo automáticamente...');
         try {
           await subscribe();
+          console.log('✅✅✅ SUSCRIPCIÓN EXITOSA');
           return true;
         } catch (subError) {
           console.error('❌ Error al suscribirse:', subError);
+          console.error('Stack trace:', subError.stack);
           return false;
         }
       }
@@ -249,9 +263,11 @@ export function usePushNotifications() {
           console.log('✅ Permiso concedido, suscribiendo...');
           try {
             await subscribe();
+            console.log('✅✅✅ SUSCRIPCIÓN EXITOSA');
             return true;
           } catch (subError) {
             console.error('❌ Error al suscribirse después de conceder permiso:', subError);
+            console.error('Stack trace:', subError.stack);
             return false;
           }
         } else if (permission === 'denied') {
@@ -268,9 +284,8 @@ export function usePushNotifications() {
 
       return false;
     } catch (err) {
-      // Silenciar errores para no interrumpir la experiencia del usuario
-      console.warn('⚠️ No se pudo auto-suscribir a notificaciones:', err.message);
-      console.error('Error completo:', err);
+      console.error('⚠️ Error en autoSubscribe:', err.message);
+      console.error('Stack trace:', err.stack);
       return false;
     }
   }

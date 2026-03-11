@@ -6,6 +6,7 @@ import { api, currentUser } from '../api'
 import ValidationErrors from '../components/ValidationErrors.vue'
 import FormInput from '../components/FormInput.vue'
 import { useNotifications } from '../composables/useNotifications'
+import { usePushNotifications } from '../composables/usePushNotifications'
 import { validateCode } from '../utils/validation'
 
 const router = useRouter()
@@ -19,7 +20,26 @@ const friendCode = ref('')
 const { request, loading: adding, error: networkError } = useNetworkRequest()
 const validationErrors = ref([])
 const { success, error: showError, warning: showWarning } = useNotifications()
+const { subscribe, isSubscribed, checkSubscription } = usePushNotifications()
 let pollingInterval = null
+
+// Verificar estado de suscripción al iniciar
+onMounted(() => {
+  checkSubscription()
+})
+
+// Función para activar notificaciones manualmente
+async function enablePushNotifications() {
+  try {
+    console.log('👆 Activando notificaciones desde Friends.vue...')
+    await subscribe()
+    success('✅ Notificaciones activadas correctamente')
+    console.log('✅✅✅ NOTIFICACIONES ACTIVADAS EXITOSAMENTE')
+  } catch (error) {
+    console.error('Error al activar notificaciones:', error)
+    showError('No se pudieron activar las notificaciones. Verifica los permisos del navegador.')
+  }
+}
 
 async function loadFriends(){
   if(!localStorage.token){
@@ -230,6 +250,25 @@ onUnmounted(() => {
           <span>📋</span> Copiar
         </button>
       </div>
+    </div>
+
+    <!-- Push Notifications Section -->
+    <div v-if="!isSubscribed" class="push-notification-card">
+      <div class="push-content">
+        <span class="push-bell-icon">🔔</span>
+        <div class="push-info">
+          <h3>Activa las Notificaciones Push</h3>
+          <p>Recibe alertas instantáneas cuando alguien te envíe una solicitud de amistad</p>
+        </div>
+        <button @click="enablePushNotifications" class="activate-push-btn">
+          ✅ Activar Notificaciones
+        </button>
+      </div>
+    </div>
+    
+    <div v-else class="push-enabled-card">
+      <span class="check-icon">✅</span>
+      <span>Notificaciones activas</span>
     </div>
 
     <!-- Add Friend Section -->
@@ -1050,6 +1089,121 @@ onUnmounted(() => {
   
   .friend-actions button{
     width: 100%;
+  }
+}
+
+/* Push Notifications Section */
+.push-notification-card {
+  background: linear-gradient(135deg, #FFCB05 0%, #FFA500 100%);
+  border: 4px solid #CC0000;
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+  50% {
+    box-shadow: 0 12px 32px rgba(255, 203, 5, 0.4);
+  }
+}
+
+.push-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.push-bell-icon {
+  font-size: 48px;
+  animation: ring 2s ease-in-out infinite;
+}
+
+@keyframes ring {
+  0%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(-15deg); }
+  20%, 40% { transform: rotate(15deg); }
+}
+
+.push-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.push-info h3 {
+  margin: 0 0 8px 0;
+  color: #222;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.push-info p {
+  margin: 0;
+  color: #333;
+  font-size: 14px;
+}
+
+.activate-push-btn {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: 3px solid white;
+  padding: 14px 28px;
+  border-radius: 25px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.activate-push-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+}
+
+.activate-push-btn:active {
+  transform: translateY(0) scale(1);
+}
+
+.push-enabled-card {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  border: 3px solid white;
+  border-radius: 15px;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.check-icon {
+  font-size: 24px;
+}
+
+@media (max-width: 768px) {
+  .push-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .activate-push-btn {
+    width: 100%;
+  }
+  
+  .push-info {
+    min-width: unset;
   }
 }
 </style>

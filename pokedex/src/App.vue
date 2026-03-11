@@ -1,6 +1,6 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router'
-import { onMounted, watch } from 'vue'
+import { onMounted, watch, ref, onUnmounted } from 'vue'
 import { logout } from './api'
 import { user, clearUser } from './store'
 import ThemeToggle from './components/ThemeToggle.vue'
@@ -14,7 +14,23 @@ const router = useRouter()
 const route = useRoute()
 const { setupAutoTracking } = useAnalytics()
 const { monitorWebVitals } = usePerformance()
-const { autoSubscribe } = usePushNotifications()
+const { autoSubscribe, subscribe, isSubscribed } = usePushNotifications()
+
+// Banner de notificaciones
+const showPushBanner = ref(false)
+
+// Función para activar notificaciones manualmente
+const enableNotifications = async () => {
+  try {
+    console.log('👆 Usuario hizo clic en activar notificaciones')
+    await subscribe()
+    showPushBanner.value = false
+    console.log('✅✅✅ NOTIFICACIONES ACTIVADAS')
+  } catch (error) {
+    console.error('Error activando notificaciones:', error)
+    alert('No se pudieron activar las notificaciones. Verifica los permisos del navegador.')
+  }
+}
 
 onMounted(() => {
   // Inicializar analytics
@@ -25,17 +41,26 @@ onMounted(() => {
   
   // Auto-suscribirse a notificaciones push si el usuario está autenticado
   if (user.value) {
-    console.log('🔔 Usuario autenticado, intentando auto-suscripción a push notifications...')
-    // Intentar inmediatamente sin espera
-    autoSubscribe().catch(err => {
-      console.warn('⚠️ Auto-suscripción falló:', err)
+    console.log('🔔 Usuario autenticado, intentando auto-suscripción agresiva...')
+    // Intentar inmediatamente
+    autoSubscribe().then(success => {
+      if (!success && Notification.permission === 'default') {
+        // Mostrar banner después de 2 segundos si no se suscribió
+        setTimeout(() => {
+          if (!isSubscribed.value) {
+            showPushBanner.value = true
+          }
+        }, 2000)
+      }
     })
-    // Reintentar después de 2 segundos si falló
+    // Reintentar después de 3 segundos
     setTimeout(() => {
-      autoSubscribe().catch(err => {
-        console.warn('⚠️ Segundo intento de suscripción falló:', err)
+      autoSubscribe().then(success => {
+        if (!success && Notification.permission === 'default') {
+          showPushBanner.value = true
+        }
       })
-    }, 2000)
+    }, 3000)
   }
   
   // Manejar clicks en notificaciones push
@@ -50,20 +75,47 @@ onMounted(() => {
   }
 })
 
+// Reintentar cada 10 segundos si tiene permiso pero no está suscrito
+let subscriptionRetryInterval = null
+onMounted(() => {
+  subscriptionRetryInterval = setInterval(() => {
+    if (user.value && !isSubscribed.value && Notification.permission === 'granted') {
+      console.log('🔄 Reintentando suscripción automática (permiso granted pero no suscrito)...')
+      autoSubscribe()
+    }
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (subscriptionRetryInterval) {
+    clearInterval(subscriptionRetryInterval)
+  }
+})
+
 // Observar cambios en el estado de autenticación del usuario
 watch(user, (newUser) => {
   if (newUser) {
     console.log('🔔 Usuario inició sesión, auto-suscribiendo a push notifications...')
-    // Intentar inmediatamente
-    autoSubscribe().catch(err => {
-      console.warn('⚠️ Suscripción en login falló:', err)
-    })
-    // Reintentar
+    // Esperar un poco al Service Worker
     setTimeout(() => {
-      autoSubscribe().catch(err => {
-        console.warn('⚠️ Reintento de suscripción falló:', err)
+      autoSubscribe().then(success => {
+        if (!success) {
+          // Reintentar después de 3 segundos
+          setTimeout(() => {
+            autoSubscribe().then(retrySuccess => {
+              if (!retrySuccess && Notification.permission === 'default') {
+                // Mostrar banner si no funcionó
+                setTimeout(() => {
+                  if (!isSubscribed.value) {
+                    showPushBanner.value = true
+                  }
+                }, 2000)
+              }
+            })
+          }, 3000)
+        }
       })
-    }, 2000)
+    }, 1000)
   }
 })
 
@@ -80,6 +132,16 @@ function isActive(path){
 
 <template>
   <div class="app-shell">
+    <!-- Banner de notificaciones push -->
+    <div v-if="showPushBanner && user" class="push-notification-banner">
+      <div class="push-banner-content">
+        <span class="push-icon">🔔</span>
+        <span class="push-text">¡Activa las notificaciones para recibir solicitudes de amistad al instante!</span>
+        <button @click="enableNotifications" class="push-activate-btn">✅ Activar Ahora</button>
+        <button @click="showPushBanner = false" class="push-close-btn">✕</button>
+      </div>
+    </div>
+    
     <NotificationCenter />
     <header class="pokemon-header">
       <div class="header-top">
@@ -508,6 +570,125 @@ function isActive(path){
   .pokeball-button{
     width: 12px;
     height: 12px;
+  }
+}
+
+/* Banner de notificaciones push */
+.push-notification-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #FFCB05 0%, #FFA500 100%);
+  border-bottom: 4px solid #CC0000;
+  padding: 16px 20px;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.push-banner-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.push-icon {
+  font-size: 32px;
+  animation: ring 2s ease-in-out infinite;
+}
+
+@keyframes ring {
+  0%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(-10deg); }
+  20%, 40% { transform: rotate(10deg); }
+}
+
+.push-text {
+  flex: 1;
+  color: #222;
+  font-weight: 700;
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+  min-width: 250px;
+}
+
+.push-activate-btn {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: 3px solid white;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.push-activate-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+}
+
+.push-activate-btn:active {
+  transform: translateY(0);
+}
+
+.push-close-btn {
+  background: rgba(0,0,0,0.2);
+  color: #222;
+  border: 2px solid rgba(0,0,0,0.3);
+  padding: 8px 12px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.push-close-btn:hover {
+  background: rgba(0,0,0,0.4);
+  transform: rotate(90deg);
+}
+
+@media (max-width: 768px) {
+  .push-banner-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  
+  .push-text {
+    min-width: unset;
+    font-size: 14px;
+  }
+  
+  .push-activate-btn {
+    width: 100%;
+    max-width: 300px;
   }
 }
 </style>

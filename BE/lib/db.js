@@ -336,9 +336,15 @@ async function removeFriend(userId, friendId) {
 
 async function savePushSubscription(userId, subscription) {
   try {
-    console.log(`💾 Guardando suscripción para userId: ${userId}`);
-    console.log(`📍 Endpoint: ${subscription.endpoint.substring(0, 50)}...`);
+    console.log('\n💾 ============ GUARDANDO SUSCRIPCIÓN PUSH ============');
+    console.log('   User ID:', userId);
+    console.log('   Endpoint:', subscription.endpoint.substring(0, 60) + '...');
+    console.log('   Keys:', {
+      p256dh: subscription.keys.p256dh.substring(0, 20) + '...',
+      auth: subscription.keys.auth.substring(0, 20) + '...'
+    });
     
+    console.log('   Ejecutando INSERT/UPDATE...');
     const result = await pool.query(
       `INSERT INTO push_subscriptions (user_id, endpoint, keys_p256dh, keys_auth) 
        VALUES ($1, $2, $3, $4)
@@ -348,15 +354,27 @@ async function savePushSubscription(userId, subscription) {
       [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
     );
     
-    console.log(`✅ Suscripción guardada/actualizada exitosamente`);
+    console.log('✅ Query ejecutado exitosamente');
+    console.log('   Registro guardado:', {
+      id: result.rows[0].id,
+      user_id: result.rows[0].user_id,
+      created_at: result.rows[0].created_at
+    });
+    console.log('========================================================\n');
     return true;
   } catch (error) {
+    console.error('\n❌ ============ ERROR GUARDANDO SUSCRIPCIÓN ============');
+    console.error('   Error message:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Error detail:', error.detail);
+    console.error('   Stack:', error.stack);
+    console.error('========================================================\n');
+    
     // Si la tabla no existe, solo registrar en consola pero no fallar
     if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
       console.log('⚠️  Tabla push_subscriptions no existe. Ejecuta la migración para habilitar notificaciones push.');
       return false;
     }
-    console.error('❌ Error guardando suscripción:', error);
     throw error;
   }
 }
