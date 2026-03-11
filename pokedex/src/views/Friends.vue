@@ -71,8 +71,26 @@ async function loadFriends(){
       pendientes: pendingRequests.value.length,
       enviadas: sentRequests.value.length
     })
+    
+    // Logging detallado de solicitudes pendientes
+    if (pendingRequests.value.length > 0) {
+      console.log('📨 Solicitudes pendientes recibidas:')
+      pendingRequests.value.forEach((req, i) => {
+        console.log(`   ${i + 1}. ${req.name} (${req.code})`)
+      })
+    } else {
+      console.log('ℹ️  No hay solicitudes pendientes')
+    }
+    
+    // Logging de solicitudes enviadas
+    if (sentRequests.value.length > 0) {
+      console.log('📤 Solicitudes enviadas:')
+      sentRequests.value.forEach((req, i) => {
+        console.log(`   ${i + 1}. Para ${req.name} (${req.code})`)
+      })
+    }
   }catch(e){
-    console.error(e)
+    console.error('❌ Error cargando datos:', e)
     if (!friends.value.length) {
       showError('Error al cargar amigos')
     }
@@ -125,11 +143,11 @@ async function addFriend(){
     friendCode.value = ''
     
     // Recargar INMEDIATAMENTE todas las listas
-    console.log('🔄 Recargando listas de amigos...')
+    console.log('🔄 Recargando todas las listas (amigos, pendientes, enviadas)...')
     try {
       await loadFriends()
-      console.log('✅ Listas actualizadas exitosamente')
-      success('✓ Solicitud de amistad enviada')
+      console.log('✅ Listas recargadas exitosamente')
+      success('✓ Solicitud de amistad enviada. El receptor será notificado.')
     } catch (loadError) {
       console.error('❌ Error recargando listas:', loadError)
       // Mostrar mensaje de éxito de todas formas

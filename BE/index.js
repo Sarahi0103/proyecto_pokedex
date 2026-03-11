@@ -728,7 +728,20 @@ app.post('/api/friends/add', authMiddleware, apiFriendsLimiter, async (req,res)=
     if(friend.id === user.id) return res.status(400).json({ error: 'Cannot add yourself' });
     
     console.log('✅ Agregando amigo:', user.email, '->', friend.email);
+    console.log(`📝 Creando solicitud: user_id=${user.id}, friend_id=${friend.id}, status=pending`);
     await addFriend(user.id, friend.id);
+    console.log('✅ Solicitud guardada en la BD');
+    
+    // Verificar que se guardó correctamente
+    const verify = await pool.query(
+      'SELECT * FROM friends WHERE user_id = $1 AND friend_id = $2',
+      [user.id, friend.id]
+    );
+    if (verify.rows.length > 0) {
+      console.log(`✅ Verificado en BD: status="${verify.rows[0].status}", id=${verify.rows[0].id}`);
+    } else {
+      console.log('⚠️  Advertencia: No se encontró la solicitud después de insertarla');
+    }
     
     // Enviar push notification al amigo
     console.log('📤 Enviando push notification de amistad...');
@@ -764,10 +777,21 @@ app.post('/api/friends/add', authMiddleware, apiFriendsLimiter, async (req,res)=
 app.get('/api/friends/requests', authMiddleware, async (req, res) => {
   try {
     const user = await getUserByEmail(req.user.email);
+    console.log(`📥 Solicitando pendientes para: ${user.email} (ID: ${user.id})`);
+    
     const requests = await getPendingFriendRequests(user.id);
+    console.log(`📨 Solicitudes pendientes encontradas: ${requests.length}`);
+    
+    if (requests.length > 0) {
+      console.log('📋 Detalles:');
+      requests.forEach((req, i) => {
+        console.log(`   ${i + 1}. De: ${req.name} (${req.email}) - ID: ${req.id}`);
+      });
+    }
+    
     res.json({ requests });
   } catch (e) {
-    console.error(e);
+    console.error('❌ Error obteniendo solicitudes pendientes:', e);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -776,7 +800,18 @@ app.get('/api/friends/requests', authMiddleware, async (req, res) => {
 app.get('/api/friends/sent', authMiddleware, async (req, res) => {
   try {
     const user = await getUserByEmail(req.user.email);
+    console.log(`📤 Solicitando enviadas para: ${user.email} (ID: ${user.id})`);
+    
     const sentRequests = await getSentFriendRequests(user.id);
+    console.log(`📬 Solicitudes enviadas encontradas: ${sentRequests.length}`);
+    
+    if (sentRequests.length > 0) {
+      console.log('📋 Detalles:');
+      sentRequests.forEach((req, i) => {
+        console.log(`   ${i + 1}. Para: ${req.name} (${req.email}) - ID: ${req.id}`);
+      });
+    }
+    
     res.json({ sentRequests });
   } catch (e) {
     console.error(e);
