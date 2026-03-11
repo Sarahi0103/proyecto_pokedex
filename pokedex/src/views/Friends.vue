@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkRequest } from '../composables/useNetworkRequest'
 import { api, currentUser } from '../api'
@@ -19,6 +19,7 @@ const friendCode = ref('')
 const { request, loading: adding, error: networkError } = useNetworkRequest()
 const validationErrors = ref([])
 const { success, error: showError, warning: showWarning } = useNotifications()
+let pollingInterval = null
 
 async function loadFriends(){
   if(!localStorage.token){
@@ -26,7 +27,11 @@ async function loadFriends(){
     return
   }
   
-  loading.value = true
+  // Solo mostrar loading en la primera carga
+  if (!friends.value.length) {
+    loading.value = true
+  }
+  
   try{
     const [friendsData, requestsData, sentData] = await Promise.all([
       api('/api/friends'),
@@ -40,9 +45,17 @@ async function loadFriends(){
     
     const user = currentUser()
     myCode.value = user.code || ''
+    
+    console.log('📊 Datos actualizados:', {
+      amigos: friends.value.length,
+      pendientes: pendingRequests.value.length,
+      enviadas: sentRequests.value.length
+    })
   }catch(e){
     console.error(e)
-    showError('Error al cargar amigos')
+    if (!friends.value.length) {
+      showError('Error al cargar amigos')
+    }
   }finally{
     loading.value = false
   }
@@ -171,7 +184,27 @@ function copyCode(){
   success('✓ Código copiado al portapapeles')
 }
 
-onMounted(loadFriends)
+// Inicializar y configurar polling automático
+onMounted(() => {
+  loadFriends()
+  
+  // Actualizar automáticamente cada 5 segundos para ver cambios en tiempo real
+  pollingInterval = setInterval(() => {
+    if (document.visibilityState === 'visible' && localStorage.token) {
+      loadFriends()
+    }
+  }, 5000) // 5 segundos
+  
+  console.log('✅ Polling automático activado (cada 5 segundos)')
+})
+
+// Limpiar polling al salir
+onUnmounted(() => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    console.log('🛑 Polling automático detenido')
+  }
+})
 </script>
 
 <template>

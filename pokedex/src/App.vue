@@ -26,9 +26,16 @@ onMounted(() => {
   // Auto-suscribirse a notificaciones push si el usuario está autenticado
   if (user.value) {
     console.log('🔔 Usuario autenticado, intentando auto-suscripción a push notifications...')
+    // Intentar inmediatamente sin espera
+    autoSubscribe().catch(err => {
+      console.warn('⚠️ Auto-suscripción falló:', err)
+    })
+    // Reintentar después de 2 segundos si falló
     setTimeout(() => {
-      autoSubscribe()
-    }, 1000) // Esperar 1 segundo para que el SW esté listo
+      autoSubscribe().catch(err => {
+        console.warn('⚠️ Segundo intento de suscripción falló:', err)
+      })
+    }, 2000)
   }
   
   // Manejar clicks en notificaciones push
@@ -47,9 +54,16 @@ onMounted(() => {
 watch(user, (newUser) => {
   if (newUser) {
     console.log('🔔 Usuario inició sesión, auto-suscribiendo a push notifications...')
+    // Intentar inmediatamente
+    autoSubscribe().catch(err => {
+      console.warn('⚠️ Suscripción en login falló:', err)
+    })
+    // Reintentar
     setTimeout(() => {
-      autoSubscribe()
-    }, 1000)
+      autoSubscribe().catch(err => {
+        console.warn('⚠️ Reintento de suscripción falló:', err)
+      })
+    }, 2000)
   }
 })
 
