@@ -1,4 +1,7 @@
 // Script de prueba rápida del sistema push
+// IMPORTANTE: Cargar dotenv PRIMERO
+require('dotenv').config();
+
 const { pool } = require('./lib/db');
 const { getVapidPublicKey } = require('./lib/push-notifications');
 
@@ -36,12 +39,13 @@ async function testPushSystem() {
     
     // 3. Contar suscripciones
     console.log('\n3️⃣ Suscripciones activas:');
+    let subsCount = 0;
     try {
       const subsResult = await pool.query('SELECT COUNT(*) as count FROM push_subscriptions');
-      const count = subsResult.rows[0].count;
+      subsCount = parseInt(subsResult.rows[0].count);
       
-      if (count > 0) {
-        console.log(`   ✅ ${count} usuario(s) suscrito(s)`);
+      if (subsCount > 0) {
+        console.log(`   ✅ ${subsCount} usuario(s) suscrito(s)`);
         
         // Mostrar detalles
         const details = await pool.query(`
@@ -90,10 +94,10 @@ async function testPushSystem() {
     
     // 5. Estado del sistema
     console.log('\n5️⃣ Estado del Sistema:');
-    if (vapidKey && subsResult.rows[0].count > 0) {
+    if (vapidKey && subsCount > 0) {
       console.log('   ✅ SISTEMA FUNCIONANDO CORRECTAMENTE');
       console.log('   💡 Las notificaciones push están listas para usar');
-    } else if (vapidKey && subsResult.rows[0].count === 0) {
+    } else if (vapidKey && subsCount === 0) {
       console.log('   ⚠️  SISTEMA CONFIGURADO, SIN SUSCRIPCIONES');
       console.log('   💡 Los usuarios necesitan activar las notificaciones');
       console.log('   📱 Van a ver un banner amarillo al entrar a la app');
