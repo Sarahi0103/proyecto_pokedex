@@ -26,17 +26,12 @@
 </template>
 
 <script setup>
-const props = defineProps({
-  notifications: {
-    type: Array,
-    required: true
-  }
-})
+import { useNotifications } from '../composables/useNotifications'
 
-const emit = defineEmits(['remove'])
+const { notifications, removeNotification: dismissNotification } = useNotifications()
 
 function removeNotification(id) {
-  emit('remove', id)
+  dismissNotification(id)
 }
 </script>
 

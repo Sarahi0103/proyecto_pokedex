@@ -671,6 +671,22 @@ app.post('/api/favorites', authMiddleware, async (req,res)=>{
   }
 });
 
+app.delete('/api/favorites/:id', authMiddleware, async (req,res)=>{
+  try{
+    const pokemonId = Number(req.params.id);
+    if(!Number.isFinite(pokemonId)) {
+      return res.status(400).json({ error: 'invalid pokemon id' });
+    }
+    const user = await getUserByEmail(req.user.email);
+    await removeFavorite(user.id, pokemonId);
+    const favorites = await getFavorites(user.id);
+    res.json({ favorites });
+  }catch(e){
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Teams (simple CRUD)
 app.get('/api/teams', authMiddleware, async (req,res)=>{
   try{

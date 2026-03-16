@@ -4,11 +4,14 @@ import { useNotifications } from '../composables/useNotifications'
 
 describe('useNotifications Composable', () => {
   let notifications
+  let removeNotification
 
   beforeEach(() => {
-    // Reset the notifications before each test
-    const { notifications: notifs } = useNotifications()
+    // Reset shared notifications state before each test.
+    const { notifications: notifs, removeNotification: remove } = useNotifications()
     notifications = notifs
+    removeNotification = remove
+    notifications.value.slice().forEach(n => removeNotification(n.id))
   })
 
   it('should initialize with empty notifications', () => {

@@ -1,8 +1,9 @@
 import { ref } from 'vue'
 
-export function useNotifications() {
-  const notifications = ref([])
+// Estado compartido para que todas las vistas usen la misma cola de notificaciones.
+const notifications = ref([])
 
+export function useNotifications() {
   function addNotification(message, type = 'info', duration = 3000) {
     const id = Date.now() + Math.random()
     const notification = { id, message, type }

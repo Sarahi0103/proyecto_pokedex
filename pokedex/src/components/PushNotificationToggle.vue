@@ -40,7 +40,7 @@ async function sendTestNotification() {
     testLoading.value = true;
     testMessage.value = '';
     
-    const response = await api('/api/push/test', 'POST');
+    const response = await api('/api/push/test', { method: 'POST' });
     
     if (response.success) {
       testMessage.value = '✅ Notificación enviada! Revisa tus notificaciones.';
