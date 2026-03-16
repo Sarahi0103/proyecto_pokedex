@@ -7,6 +7,10 @@ const router = useRouter()
 const favorites = ref([])
 const loading = ref(true)
 const deleting = ref(null)
+const savingMeta = ref(null)
+const editingFavorite = ref(null)
+const aliasInput = ref('')
+const noteInput = ref('')
 
 const typeColors = {
   normal: '#A8A878', fire: '#F08030', water: '#6890F0', electric: '#F8D030',
@@ -42,6 +46,43 @@ async function removeFavorite(pokemonId){
     console.error(e)
   }finally{
     deleting.value = null
+  }
+}
+
+function openMetadataEditor(favorite){
+  editingFavorite.value = favorite
+  aliasInput.value = favorite.alias || ''
+  noteInput.value = favorite.note || ''
+}
+
+function closeMetadataEditor(){
+  editingFavorite.value = null
+  aliasInput.value = ''
+  noteInput.value = ''
+}
+
+async function saveFavoriteMetadata(){
+  if(!editingFavorite.value) return
+
+  const pokemonId = editingFavorite.value.id
+  savingMeta.value = pokemonId
+
+  try{
+    const data = await api(`/api/favorites/${pokemonId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alias: aliasInput.value,
+        note: noteInput.value
+      })
+    })
+
+    favorites.value = data.favorites || favorites.value
+    closeMetadataEditor()
+  }catch(e){
+    console.error(e)
+  }finally{
+    savingMeta.value = null
   }
 }
 
@@ -110,6 +151,14 @@ onMounted(loadFavorites)
           :key="f.id" 
           class="favorite-card"
         >
+          <button
+            class="edit-btn"
+            @click.stop="openMetadataEditor(f)"
+            title="Editar alias y nota"
+          >
+            ✏️
+          </button>
+
           <button 
             class="remove-btn" 
             @click.stop="removeFavorite(f.id)"
@@ -133,6 +182,9 @@ onMounted(loadFavorites)
             
             <div class="card-info">
               <h3 class="pokemon-name">{{ f.name }}</h3>
+
+              <div v-if="f.alias" class="favorite-alias">{{ f.alias }}</div>
+              <div v-if="f.note" class="favorite-note">{{ f.note }}</div>
               
               <div v-if="f.types" class="pokemon-types">
                 <span 
@@ -150,6 +202,39 @@ onMounted(loadFavorites)
               <span>⭐</span> FAVORITO
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="editingFavorite" class="modal-overlay" @click.self="closeMetadataEditor">
+      <div class="modal-card">
+        <h3>Editar favorito: {{ editingFavorite.name }}</h3>
+
+        <label class="modal-label">Alias (opcional)</label>
+        <input
+          v-model="aliasInput"
+          class="modal-input"
+          maxlength="60"
+          placeholder="Ej: Mi atacante principal"
+        />
+
+        <label class="modal-label">Nota (opcional)</label>
+        <textarea
+          v-model="noteInput"
+          class="modal-textarea"
+          maxlength="300"
+          placeholder="Ej: útil contra tipo agua"
+        ></textarea>
+
+        <div class="modal-actions">
+          <button class="modal-cancel" @click="closeMetadataEditor">Cancelar</button>
+          <button
+            class="modal-save"
+            @click="saveFavoriteMetadata"
+            :disabled="savingMeta === editingFavorite.id"
+          >
+            {{ savingMeta === editingFavorite.id ? 'Guardando...' : 'Guardar' }}
+          </button>
         </div>
       </div>
     </div>
@@ -437,7 +522,7 @@ onMounted(loadFavorites)
 
 .remove-btn{
   position: absolute;
-  top: 12px;
+  top: 56px;
   right: 12px;
   width: 36px;
   height: 36px;
@@ -453,6 +538,31 @@ onMounted(loadFavorites)
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.edit-btn{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #3B4CCA 0%, #2A75BB 100%);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  box-shadow: 0 3px 10px rgba(59, 76, 202, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-btn:hover{
+  transform: scale(1.08);
+  box-shadow: 0 4px 14px rgba(59, 76, 202, 0.6);
 }
 
 .remove-btn:hover:not(:disabled){
@@ -517,6 +627,99 @@ onMounted(loadFavorites)
 
 .card-info{
   text-align: center;
+}
+
+.favorite-alias{
+  font-size: 13px;
+  font-weight: 700;
+  color: #2A75BB;
+  margin-top: 4px;
+}
+
+.favorite-note{
+  font-size: 12px;
+  color: #555;
+  margin-top: 4px;
+  padding: 0 8px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 16px;
+}
+
+.modal-card{
+  width: 100%;
+  max-width: 520px;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  border: 3px solid #FFCB05;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.modal-card h3{
+  margin: 0 0 14px;
+  color: #222;
+}
+
+.modal-label{
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+}
+
+.modal-input,
+.modal-textarea{
+  width: 100%;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.modal-textarea{
+  min-height: 96px;
+  resize: vertical;
+}
+
+.modal-actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.modal-cancel,
+.modal-save{
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-cancel{
+  background: #ececec;
+  color: #333;
+}
+
+.modal-save{
+  background: linear-gradient(135deg, #3B4CCA 0%, #2A75BB 100%);
+  color: white;
 }
 
 .pokemon-name{

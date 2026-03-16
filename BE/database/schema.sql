@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS favorites (
     pokemon_name VARCHAR(100),
     pokemon_sprite TEXT,
     pokemon_types TEXT, -- JSON array como texto: ["fire", "flying"]
+  alias VARCHAR(60), -- Alias opcional por favorito
+  note TEXT, -- Nota opcional por favorito
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, pokemon_id)
 );

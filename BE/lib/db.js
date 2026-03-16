@@ -81,7 +81,26 @@ async function updateUser(email, patch) {
 // FAVORITOS
 // ============================================
 
+let favoritesMetadataReady = false;
+let favoritesMetadataInitPromise = null;
+
+async function ensureFavoritesMetadataColumns() {
+  if (favoritesMetadataReady) return;
+  if (!favoritesMetadataInitPromise) {
+    favoritesMetadataInitPromise = (async () => {
+      await pool.query("ALTER TABLE favorites ADD COLUMN IF NOT EXISTS alias VARCHAR(60)");
+      await pool.query("ALTER TABLE favorites ADD COLUMN IF NOT EXISTS note TEXT");
+      favoritesMetadataReady = true;
+    })().catch((error) => {
+      favoritesMetadataInitPromise = null;
+      throw error;
+    });
+  }
+  await favoritesMetadataInitPromise;
+}
+
 async function getFavorites(userId) {
+  await ensureFavoritesMetadataColumns();
   const result = await pool.query(
     'SELECT * FROM favorites WHERE user_id = $1 ORDER BY created_at DESC',
     [userId]
@@ -91,19 +110,47 @@ async function getFavorites(userId) {
     id: row.pokemon_id,
     name: row.pokemon_name,
     sprite: row.pokemon_sprite,
-    types: row.pokemon_types ? JSON.parse(row.pokemon_types) : []
+    types: row.pokemon_types ? JSON.parse(row.pokemon_types) : [],
+    alias: row.alias || '',
+    note: row.note || ''
   }));
 }
 
 async function addFavorite(userId, pokemon) {
-  const { id, name, sprite, types } = pokemon;
+  await ensureFavoritesMetadataColumns();
+  const { id, name, sprite, types, alias, note } = pokemon;
   const typesJson = JSON.stringify(types || []);
+  const cleanAlias = typeof alias === 'string' ? alias.trim().slice(0, 60) : '';
+  const cleanNote = typeof note === 'string' ? note.trim().slice(0, 300) : '';
   
   const result = await pool.query(
-    'INSERT INTO favorites (user_id, pokemon_id, pokemon_name, pokemon_sprite, pokemon_types) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id, pokemon_id) DO NOTHING RETURNING *',
-    [userId, id, name, sprite, typesJson]
+    `INSERT INTO favorites (user_id, pokemon_id, pokemon_name, pokemon_sprite, pokemon_types, alias, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (user_id, pokemon_id)
+     DO UPDATE SET alias = COALESCE(NULLIF(EXCLUDED.alias, ''), favorites.alias),
+                   note = COALESCE(NULLIF(EXCLUDED.note, ''), favorites.note)
+     RETURNING *`,
+    [userId, id, name, sprite, typesJson, cleanAlias, cleanNote]
   );
   return result.rows[0];
+}
+
+async function updateFavoriteMetadata(userId, pokemonId, patch = {}) {
+  await ensureFavoritesMetadataColumns();
+
+  const alias = typeof patch.alias === 'string' ? patch.alias.trim().slice(0, 60) : '';
+  const note = typeof patch.note === 'string' ? patch.note.trim().slice(0, 300) : '';
+
+  const result = await pool.query(
+    `UPDATE favorites
+     SET alias = $1,
+         note = $2
+     WHERE user_id = $3 AND pokemon_id = $4
+     RETURNING *`,
+    [alias, note, userId, pokemonId]
+  );
+
+  return result.rows[0] || null;
 }
 
 async function removeFavorite(userId, pokemonId) {
@@ -1036,6 +1083,7 @@ module.exports = {
   updateUser,
   getFavorites,
   addFavorite,
+  updateFavoriteMetadata,
   removeFavorite,
   getTeams,
   addTeam,

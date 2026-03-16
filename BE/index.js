@@ -17,6 +17,7 @@ const {
   updateUser,
   getFavorites,
   addFavorite,
+  updateFavoriteMetadata,
   removeFavorite,
   getTeams,
   addTeam,
@@ -679,6 +680,29 @@ app.delete('/api/favorites/:id', authMiddleware, async (req,res)=>{
     }
     const user = await getUserByEmail(req.user.email);
     await removeFavorite(user.id, pokemonId);
+    const favorites = await getFavorites(user.id);
+    res.json({ favorites });
+  }catch(e){
+    console.error(e);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/favorites/:id', authMiddleware, async (req,res)=>{
+  try{
+    const pokemonId = Number(req.params.id);
+    if(!Number.isFinite(pokemonId)) {
+      return res.status(400).json({ error: 'invalid pokemon id' });
+    }
+
+    const { alias = '', note = '' } = req.body || {};
+    const user = await getUserByEmail(req.user.email);
+    const updated = await updateFavoriteMetadata(user.id, pokemonId, { alias, note });
+
+    if(!updated) {
+      return res.status(404).json({ error: 'favorite not found' });
+    }
+
     const favorites = await getFavorites(user.id);
     res.json({ favorites });
   }catch(e){
