@@ -658,6 +658,16 @@ async function sendChallenge() {
     })
     
     console.log('✅ Respuesta del servidor:', response)
+
+    if (response?.action === 'incoming_pending' && response?.battle?.id) {
+      highlightedIncomingChallengeId.value = response.battle.id
+    }
+
+    if (response?.action === 'incoming_pending') {
+      await loadChallenges()
+      showNotification('⚔️ Desafío pendiente detectado', response?.message || 'Ya tienes un desafío recibido. Debes aceptarlo o rechazarlo primero.')
+      return
+    }
     
     const challengeMessage = response?.message || `Esperando respuesta de ${selectedFriend.value.name}`
     showNotification('⚔️ Estado del desafío', challengeMessage)

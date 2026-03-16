@@ -1082,15 +1082,34 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
     if (pendingBetweenUsers.rows[0]) {
       const existing = pendingBetweenUsers.rows[0];
       if (existing.challenger_id === user.id) {
+        // Si ya existe un desafio pendiente enviado por el mismo usuario,
+        // reenviar notificacion para robustecer el flujo cuando el receptor no la vio.
+        notifyUser(io, opponent.id, 'new-challenge', {
+          battleId: existing.id,
+          challengerName: user.name,
+          challengerEmail: user.email,
+          message: `${user.name} te ha desafiado a una batalla!`
+        });
+
+        const battleChallengePayload = createBattleChallengePayload(user.name, existing.id);
+        sendPushToUser(opponent.id, battleChallengePayload, 'Battle challenge')
+          .then(result => {
+            if (result.success) {
+              console.log('✅ Push notification reenviada para desafío pendiente');
+            }
+          });
+
         return res.status(200).json({
           battle: { id: existing.id },
-          message: 'You already have a pending challenge for this opponent'
+          message: 'Ya tienes un desafío pendiente para este oponente. Se volvió a notificar al rival.',
+          action: 'pending_already_sent'
         });
       }
 
-      return res.status(409).json({
-        error: 'You already have a pending challenge from this opponent. Accept or reject it first.',
-        battleId: existing.id
+      return res.status(200).json({
+        battle: { id: existing.id },
+        message: 'Ya tienes un desafío pendiente recibido de este oponente. Debes aceptarlo o rechazarlo primero.',
+        action: 'incoming_pending'
       });
     }
     
