@@ -134,6 +134,18 @@ const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 const POKEAPI = process.env.POKEAPI_BASE || 'https://pokeapi.co/api/v2';
 
+const REGION_TO_GENERATION = {
+  kanto: 'generation-i',
+  johto: 'generation-ii',
+  hoenn: 'generation-iii',
+  sinnoh: 'generation-iv',
+  unova: 'generation-v',
+  kalos: 'generation-vi',
+  alola: 'generation-vii',
+  galar: 'generation-viii',
+  paldea: 'generation-ix'
+};
+
 // Rate limiting configuration
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -458,6 +470,35 @@ app.get('/api/pokemon-evolution/:id', async (req,res)=>{
     const r = await axios.get(`${POKEAPI}/evolution-chain/${encodeURIComponent(id)}`);
     res.json(r.data);
   }catch(e){
+    res.status(500).json({ error: 'PokeAPI error' });
+  }
+});
+
+app.get('/api/region-pokemon/:region', async (req, res) => {
+  try {
+    const regionKey = String(req.params.region || '').toLowerCase();
+    const generation = REGION_TO_GENERATION[regionKey];
+
+    if (!generation) {
+      return res.status(400).json({ error: 'Unsupported region' });
+    }
+
+    const generationResponse = await axios.get(`${POKEAPI}/generation/${generation}`);
+    const speciesList = generationResponse.data?.pokemon_species || [];
+
+    const results = speciesList
+      .map((species) => ({
+        name: species.name,
+        url: `${POKEAPI}/pokemon/${encodeURIComponent(species.name)}`
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      count: results.length,
+      results
+    });
+  } catch (error) {
+    console.error('Region pokemon error:', error.message);
     res.status(500).json({ error: 'PokeAPI error' });
   }
 });

@@ -43,8 +43,22 @@ async function load(){
   const region = regions.find(r => r.name === selectedRegion.value) || regions[0]
   
   try{
-    const data = await api(`/api/pokemon?limit=${region.limit}&offset=${region.offset}`)
-    const list = data.results || []
+    let list = []
+
+    // Intentar carga por región real (generación) cuando la región está seleccionada.
+    if(selectedRegion.value){
+      try {
+        const dataByRegion = await api(`/api/region-pokemon/${selectedRegion.value.toLowerCase()}`)
+        list = dataByRegion.results || []
+      } catch (regionError) {
+        // Fallback al método por rangos si falla el endpoint por región.
+        const fallbackData = await api(`/api/pokemon?limit=${region.limit}&offset=${region.offset}`)
+        list = fallbackData.results || []
+      }
+    } else {
+      const data = await api(`/api/pokemon?limit=${region.limit}&offset=${region.offset}`)
+      list = data.results || []
+    }
     
     // Cargar detalles en lotes para evitar sobrecarga
     const batchSize = 20
