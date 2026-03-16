@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, onUnmounted, defineAsyncComponent } from 'vue'
+import { ref, onMounted, computed, onUnmounted, defineAsyncComponent, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { io } from 'socket.io-client'
 import { api, currentUser } from '../api'
@@ -111,6 +111,18 @@ onMounted(async () => {
   if ('serviceWorker' in navigator) {
     serviceWorkerMessageHandler = async (event) => {
       const messageType = event.data?.type
+
+      if (messageType === 'NOTIFICATION_CLICK') {
+        const { battleId, action } = parseBattleRouteFromUrl(event.data?.url || '')
+        if (battleId) {
+          if (route.path !== '/battle') {
+            await router.push({ path: '/battle', query: { id: String(battleId), action } })
+          }
+          await handleBattleDeepLink(battleId, action)
+        }
+        return
+      }
+
       const notificationType = event.data?.notificationType || event.data?.data?.type
 
       if (!messageType || !notificationType) {
@@ -135,12 +147,15 @@ onMounted(async () => {
   
   await loadInitialData()
   await loadChallenges()
+
+  if (route.query.id) {
+    await handleBattleDeepLink(route.query.id, route.query.action || 'view')
+  }
   
   const userInfo = getCurrentUserInfo()
   previousChallengesCount.value = challenges.value.filter(c => {
     if (c.status !== 'pending') return false
-    if (userInfo.id) return c.opponent_user_id === userInfo.id
-    return c.opponent_email === userInfo.email
+    return isCurrentUserOpponent(c, userInfo)
   }).length
   
   // console.log('🔢 Initial challenges count:', previousChallengesCount.value)
@@ -152,16 +167,14 @@ onMounted(async () => {
     await loadChallenges()
     const newCount = challenges.value.filter(c => {
       if (c.status !== 'pending') return false
-      if (userInfo.id) return c.opponent_user_id === userInfo.id
-      return c.opponent_email === userInfo.email
+      return isCurrentUserOpponent(c, userInfo)
     }).length
     
     // Si hay nuevos desafíos, mostrar notificación
     if (newCount > oldCount) {
       const newChallenges = challenges.value.filter(c => {
         if (c.status !== 'pending') return false
-        if (userInfo.id) return c.opponent_user_id === userInfo.id
-        return c.opponent_email === userInfo.email
+        return isCurrentUserOpponent(c, userInfo)
       })
       // console.log('🎮 ¡Nuevo desafío detectado!', newChallenges[0])
       showNotification(`⚔️ ¡Nuevo desafío de batalla!`, `${newChallenges[0].challenger_name} te ha desafiado`)
@@ -419,6 +432,68 @@ function getUserIdFromToken() {
   return getCurrentUserInfo().id
 }
 
+function normalizeId(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function isCurrentUserOpponent(challenge, userInfo) {
+  const userId = normalizeId(userInfo.id)
+  if (userId !== null) {
+    return normalizeId(challenge.opponent_user_id) === userId
+  }
+  return challenge.opponent_email === userInfo.email
+}
+
+function isCurrentUserChallenger(challenge, userInfo) {
+  const userId = normalizeId(userInfo.id)
+  if (userId !== null) {
+    return normalizeId(challenge.challenger_user_id) === userId
+  }
+  return challenge.challenger_email === userInfo.email
+}
+
+function isCurrentUserParticipant(challenge, userInfo) {
+  return isCurrentUserOpponent(challenge, userInfo) || isCurrentUserChallenger(challenge, userInfo)
+}
+
+function parseBattleRouteFromUrl(url) {
+  try {
+    const parsedUrl = new URL(url, window.location.origin)
+    const battleId = parsedUrl.searchParams.get('id')
+    const action = parsedUrl.searchParams.get('action') || 'view'
+    return { battleId, action }
+  } catch (e) {
+    return { battleId: null, action: 'view' }
+  }
+}
+
+async function handleBattleDeepLink(battleId, action = 'view') {
+  const normalizedBattleId = normalizeId(battleId)
+  if (normalizedBattleId === null) return
+
+  await loadChallenges()
+
+  const userInfo = getCurrentUserInfo()
+  const targetChallenge = challenges.value.find(c => {
+    return normalizeId(c.id) === normalizedBattleId && isCurrentUserParticipant(c, userInfo)
+  })
+
+  if (!targetChallenge) {
+    showNotification('⚠️ Batalla no disponible', 'No se encontró ese desafío o ya no está activo')
+    return
+  }
+
+  if (action === 'accept' && targetChallenge.status === 'pending' && isCurrentUserOpponent(targetChallenge, userInfo)) {
+    showNotification('✅ Desafío recibido', 'Selecciona tu equipo y presiona "Aceptar" en Desafíos Recibidos')
+    return
+  }
+
+  if (targetChallenge.status === 'accepted' || targetChallenge.status === 'in_progress' || targetChallenge.status === 'completed') {
+    await loadBattle(targetChallenge.id)
+  }
+}
+
 
 function showNotification(title, body) {
   // Notificación del navegador
@@ -516,11 +591,7 @@ async function loadChallenges() {
     // Logs comentados para evitar spam en consola
     // console.log('📋 Challenges cargados:', challenges.value.length)
     
-    const pendingForUser = challenges.value.filter(c => {
-      if (c.status !== 'pending') return false
-      if (userInfo.id) return c.opponent_user_id === userInfo.id
-      return c.opponent_email === userInfo.email
-    })
+    const pendingForUser = challenges.value.filter(c => c.status === 'pending' && isCurrentUserOpponent(c, userInfo))
     
   } catch (e) {
     console.error('Error loading challenges:', e)
@@ -582,8 +653,17 @@ async function acceptChallenge(challenge) {
     
     console.log('✅ Desafío aceptado:', response)
     
-    // Remover de la lista de pendientes
-    challenges.value = challenges.value.filter(c => c.id !== challenge.id)
+    // Mantener la batalla visible localmente para evitar UI vacía si la recarga tarda
+    challenges.value = challenges.value.map(c => {
+      if (c.id === challenge.id) {
+        return {
+          ...c,
+          status: 'accepted',
+          opponent_team_index: selectedTeam.value
+        }
+      }
+      return c
+    })
     
     showNotification('✅ Desafío aceptado', 'La batalla aparecerá en "Batallas Listas". Haz clic en "Ejecutar Batalla" cuando estés listo.')
     playNotificationSound()
@@ -1121,8 +1201,7 @@ const myPendingChallenges = computed(() => {
   return challenges.value.filter(c => {
     // Desafíos donde soy el oponente (opponent) y están pendientes
     if (c.status !== 'pending') return false
-    if (userInfo.id) return c.opponent_user_id === userInfo.id
-    return c.opponent_email === userInfo.email
+    return isCurrentUserOpponent(c, userInfo)
   })
 })
 
@@ -1131,8 +1210,7 @@ const mySentChallenges = computed(() => {
   return challenges.value.filter(c => {
     // Desafíos que yo envié (soy el challenger) y están pendientes
     if (c.status !== 'pending') return false
-    if (userInfo.id) return c.challenger_user_id === userInfo.id
-    return c.challenger_email === userInfo.email
+    return isCurrentUserChallenger(c, userInfo)
   })
 })
 
@@ -1141,12 +1219,18 @@ const acceptedBattles = computed(() => {
   return challenges.value.filter(c => {
     if (c.status !== 'accepted') return false
     // Solo mostrar batallas donde soy participante
-    if (userInfo.id) {
-      return c.challenger_user_id === userInfo.id || c.opponent_user_id === userInfo.id
-    }
-    return c.challenger_email === userInfo.email || c.opponent_email === userInfo.email
+    return isCurrentUserParticipant(c, userInfo)
   })
 })
+
+watch(
+  () => [route.query.id, route.query.action],
+  async ([battleId, action]) => {
+    if (battleId) {
+      await handleBattleDeepLink(battleId, action || 'view')
+    }
+  }
+)
 
 function getUserEmailFromToken() {
   return getCurrentUserInfo().email
