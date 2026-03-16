@@ -39,6 +39,7 @@ const seenActiveBattles = ref(new Set())
 const activeBattlePolling = ref(false)
 const battleAnimationInterval = ref(null)
 let serviceWorkerMessageHandler = null
+const highlightedIncomingChallengeId = ref(null)
 
 // Estados de batalla en tiempo real
 const realtimeBattle = ref(null)
@@ -472,12 +473,34 @@ async function handleBattleDeepLink(battleId, action = 'view') {
   const normalizedBattleId = normalizeId(battleId)
   if (normalizedBattleId === null) return
 
-  await loadChallenges()
-
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
   const userInfo = getCurrentUserInfo()
-  const targetChallenge = challenges.value.find(c => {
-    return normalizeId(c.id) === normalizedBattleId && isCurrentUserParticipant(c, userInfo)
-  })
+  let targetChallenge = null
+
+  // Reintentos: evita falsos negativos cuando llegas desde notificación y la API tarda en reflejar el reto
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await loadChallenges()
+    targetChallenge = challenges.value.find(c => {
+      return normalizeId(c.id) === normalizedBattleId && isCurrentUserParticipant(c, userInfo)
+    })
+
+    if (targetChallenge) break
+    await sleep(500)
+  }
+
+  // Si venimos desde acción aceptar y no llegó por id, mostrar cualquier reto pendiente mío en interfaz
+  if (!targetChallenge && action === 'accept') {
+    const fallbackPending = challenges.value.find(c => c.status === 'pending' && isCurrentUserOpponent(c, userInfo))
+    if (fallbackPending) {
+      highlightedIncomingChallengeId.value = fallbackPending.id
+      showNotification('✅ Desafío recibido', 'Ya aparece en la interfaz. Selecciona tu equipo y presiona "Aceptar" o "Eliminar"')
+      return
+    }
+
+    // No mostrar error duro en este caso; solo aviso suave
+    showNotification('⏳ Sincronizando desafío', 'Aún no aparece el reto en la lista. Espera unos segundos y vuelve a abrir notificación')
+    return
+  }
 
   if (!targetChallenge) {
     showNotification('⚠️ Batalla no disponible', 'No se encontró ese desafío o ya no está activo')
@@ -485,7 +508,8 @@ async function handleBattleDeepLink(battleId, action = 'view') {
   }
 
   if (action === 'accept' && targetChallenge.status === 'pending' && isCurrentUserOpponent(targetChallenge, userInfo)) {
-    showNotification('✅ Desafío recibido', 'Selecciona tu equipo y presiona "Aceptar" en Desafíos Recibidos')
+    highlightedIncomingChallengeId.value = targetChallenge.id
+    showNotification('✅ Desafío recibido', 'Ya aparece en la interfaz. Selecciona tu equipo y presiona "Aceptar" o "Eliminar"')
     return
   }
 
@@ -1654,7 +1678,12 @@ function debugBattleSystem() {
       <div v-if="myPendingChallenges.length > 0" class="challenges-section">
         <h3>📨 Desafíos Recibidos ({{ myPendingChallenges.length }})</h3>
         <div class="challenges-grid">
-          <div v-for="challenge in myPendingChallenges" :key="challenge.id" class="challenge-card">
+          <div
+            v-for="challenge in myPendingChallenges"
+            :key="challenge.id"
+            class="challenge-card"
+            :class="{ 'challenge-card-highlight': normalizeId(challenge.id) === normalizeId(highlightedIncomingChallengeId) }"
+          >
             <div class="challenge-header">
               <span class="challenge-from">De: <strong>{{ challenge.challenger_name }}</strong></span>
               <span class="challenge-status pending">Pendiente</span>
@@ -1667,7 +1696,7 @@ function debugBattleSystem() {
                 ✓ Aceptar
               </button>
               <button class="btn btn-danger" @click="rejectChallenge(challenge)">
-                ✗ Rechazar
+                ✗ Eliminar
               </button>
             </div>
           </div>
@@ -2780,6 +2809,18 @@ function debugBattleSystem() {
   border-radius: 12px;
   padding: 16px;
   transition: all 0.3s ease;
+}
+
+.challenge-card-highlight {
+  border-color: #ffcb05;
+  box-shadow: 0 0 0 3px rgba(255, 203, 5, 0.25);
+  animation: challengePulse 1s ease-in-out 2;
+}
+
+@keyframes challengePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.01); }
+  100% { transform: scale(1); }
 }
 
 .challenge-card.ready{
