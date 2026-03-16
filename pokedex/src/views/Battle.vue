@@ -18,6 +18,7 @@ const myTeams = ref([])
 const friends = ref([])
 const selectedTeam = ref(null)
 const selectedFriend = ref(null)
+const challengeTeamSelections = ref({})
 const loading = ref(false)
 const challenges = ref([])
 const activeBattle = ref(null)
@@ -669,19 +670,21 @@ async function sendChallenge() {
 }
 
 async function acceptChallenge(challenge) {
-  if (selectedTeam.value === null || selectedTeam.value === undefined) {
+  const teamIndex = challengeTeamSelections.value[challenge.id]
+
+  if (teamIndex === null || teamIndex === undefined || teamIndex === '') {
     showNotification('⚠️ Equipo requerido', 'Por favor selecciona un equipo para aceptar el desafío')
     return
   }
   
-  console.log(`✅ Aceptando desafío ${challenge.id} con equipo index:`, selectedTeam.value)
+  console.log(`✅ Aceptando desafío ${challenge.id} con equipo index:`, teamIndex)
   
   try {
     // Aceptar el desafío
     const response = await api(`/api/battles/${challenge.id}/accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamIndex: selectedTeam.value })
+      body: JSON.stringify({ teamIndex: Number(teamIndex) })
     })
     
     console.log('✅ Desafío aceptado:', response)
@@ -692,7 +695,7 @@ async function acceptChallenge(challenge) {
         return {
           ...c,
           status: 'accepted',
-          opponent_team_index: selectedTeam.value
+          opponent_team_index: Number(teamIndex)
         }
       }
       return c
@@ -701,11 +704,15 @@ async function acceptChallenge(challenge) {
     showNotification('✅ Desafío aceptado', 'La batalla aparecerá en "Batallas Listas". Haz clic en "Ejecutar Batalla" cuando estés listo.')
     playNotificationSound()
     
-    // Resetear selección
-    selectedTeam.value = null
+    delete challengeTeamSelections.value[challenge.id]
+
+    if (route.query.id && normalizeId(route.query.id) === normalizeId(challenge.id)) {
+      router.replace('/battle')
+    }
     
     // Recargar desafíos para mostrar la batalla en "Batallas Listas"
     await loadChallenges()
+    await loadBattle(challenge.id)
   } catch (e) {
     console.error('❌ Error aceptando desafío:', e)
     showNotification('❌ Error', e.message || 'No se pudo aceptar el desafío')
@@ -722,13 +729,18 @@ async function rejectChallenge(challenge) {
     
     // Remover de la lista inmediatamente
     challenges.value = challenges.value.filter(c => c.id !== challenge.id)
+    delete challengeTeamSelections.value[challenge.id]
+
+    if (route.query.id && normalizeId(route.query.id) === normalizeId(challenge.id)) {
+      router.replace('/battle')
+    }
     
     showNotification('❌ Desafío rechazado', `Rechazaste el desafío de ${challenge.challenger_name}`)
     
     await loadChallenges()
   } catch (e) {
     console.error(e)
-    alert('Error al rechazar desafío')
+    showNotification('❌ Error', 'No se pudo eliminar el desafío')
   }
 }
 
@@ -1699,6 +1711,15 @@ function debugBattleSystem() {
             </div>
             <div class="challenge-time">
               {{ new Date(challenge.created_at).toLocaleString() }}
+            </div>
+            <div class="challenge-team-picker">
+              <label class="challenge-team-label">Elige tu equipo para esta batalla</label>
+              <select v-model="challengeTeamSelections[challenge.id]" class="challenge-team-select">
+                <option :value="undefined">-- Selecciona tu equipo --</option>
+                <option v-for="(team, index) in myTeams" :key="`${challenge.id}-${index}`" :value="index">
+                  {{ team.name || `Equipo ${index + 1}` }} ({{ (team.pokemons || []).length }} Pokémon)
+                </option>
+              </select>
             </div>
             <div class="challenge-actions">
               <button class="btn btn-success" @click="acceptChallenge(challenge)">
@@ -2792,6 +2813,27 @@ function debugBattleSystem() {
   text-align: center;
 }
 
+
+.challenge-team-picker {
+  margin-top: 12px;
+}
+
+.challenge-team-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #444;
+  margin-bottom: 6px;
+}
+
+.challenge-team-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #d9d9d9;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #fff;
+}
 .challenges-section{
   background: white;
   padding: 24px;
