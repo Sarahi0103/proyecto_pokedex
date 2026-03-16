@@ -1,6 +1,15 @@
 // Push Notifications Manager
 const webpush = require('web-push');
 
+function createNotificationTag(prefix, value) {
+  const normalizedValue = String(value || 'default')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return `${prefix}-${normalizedValue || 'default'}`;
+}
+
 // Configurar VAPID keys
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
@@ -39,13 +48,18 @@ async function sendPushNotification(userSubs, payload) {
   console.log(`📦 Payload:`, JSON.stringify(payload));
   
   const payloadString = JSON.stringify(payload);
+  const deliveryOptions = {
+    TTL: payload.ttl || 60,
+    urgency: payload.urgency || 'high',
+    topic: payload.tag || payload.data?.type || undefined
+  };
   const results = [];
   const invalidEndpoints = [];
   
   for (const subscription of userSubs) {
     try {
       console.log(`🔄 Enviando a endpoint: ${subscription.endpoint.substring(0, 50)}...`);
-      await webpush.sendNotification(subscription, payloadString);
+      await webpush.sendNotification(subscription, payloadString, deliveryOptions);
       results.push({ success: true, endpoint: subscription.endpoint });
       console.log(`✅ Push notification enviada exitosamente`);
     } catch (error) {
@@ -82,11 +96,15 @@ function createFriendRequestPayload(friendName) {
     body: `${friendName} quiere ser tu amigo en Pokedex!`,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
-    tag: 'friend-request',
+    tag: createNotificationTag('friend-request', friendName),
+    requireInteraction: true,
     data: {
       type: 'friend-request',
+      senderName: friendName,
+      timestamp: Date.now(),
       url: '/friends'
-    }
+    },
+    urgency: 'high'
   };
 }
 
@@ -99,10 +117,13 @@ function createBattleChallengePayload(challengerName, battleId) {
     body: `${challengerName} te ha retado a una batalla!`,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
-    tag: 'battle-challenge',
+    tag: createNotificationTag('battle-challenge', battleId),
+    requireInteraction: true,
     data: {
       type: 'battle-challenge',
       battleId: battleId,
+      challengerName: challengerName,
+      timestamp: Date.now(),
       url: `/battle?id=${battleId}`
     },
     actions: [
@@ -114,7 +135,8 @@ function createBattleChallengePayload(challengerName, battleId) {
         action: 'view',
         title: 'Ver detalles'
       }
-    ]
+    ],
+    urgency: 'high'
   };
 }
 
@@ -127,12 +149,15 @@ function createBattleAcceptedPayload(opponentName, battleId) {
     body: `${opponentName} ha aceptado tu desafío!`,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
-    tag: 'battle-accepted',
+    tag: createNotificationTag('battle-accepted', battleId),
     data: {
       type: 'battle-accepted',
       battleId: battleId,
+      opponentName: opponentName,
+      timestamp: Date.now(),
       url: `/battle?id=${battleId}`
-    }
+    },
+    urgency: 'high'
   };
 }
 
@@ -145,11 +170,14 @@ function createFriendAcceptedPayload(friendName) {
     body: `${friendName} aceptó tu solicitud de amistad!`,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
-    tag: 'friend-accepted',
+    tag: createNotificationTag('friend-accepted', friendName),
     data: {
       type: 'friend-accepted',
+      senderName: friendName,
+      timestamp: Date.now(),
       url: '/friends'
-    }
+    },
+    urgency: 'high'
   };
 }
 

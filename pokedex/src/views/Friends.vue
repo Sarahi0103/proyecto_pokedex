@@ -22,6 +22,7 @@ const validationErrors = ref([])
 const { success, error: showError, warning: showWarning } = useNotifications()
 const { subscribe, isSubscribed, checkSubscription } = usePushNotifications()
 let pollingInterval = null
+let serviceWorkerMessageHandler = null
 
 // Verificar estado de suscripción al iniciar
 onMounted(() => {
@@ -145,8 +146,6 @@ async function addFriend(){
     // Recargar INMEDIATAMENTE todas las listas
     console.log('🔄 Recargando todas las listas (amigos, pendientes, enviadas)...')
     try {
-      // Pequeña pausa para asegurar que el servidor procesó todo
-      await new Promise(resolve => setTimeout(resolve, 500))
       await loadFriends()
       console.log('✅ Listas recargadas exitosamente')
       console.log('📊 Estado actual:', {
@@ -187,9 +186,8 @@ async function acceptRequest(friendId) {
     console.log('✅ Solicitud aceptada, respuesta:', result)
     success('✓ Solicitud aceptada')
     
-    // Actualizar TODAS las listas inmediatamente con loading pause pequeña para asegurar que el servidor procesó todo
+    // Actualizar TODAS las listas inmediatamente
     console.log('🔄 Recargando listas después de aceptar...')
-    await new Promise(resolve => setTimeout(resolve, 500))
     await loadFriends()
     console.log('✅ Listas actualizadas:', {
       amigos: friends.value.length,
@@ -252,6 +250,53 @@ onMounted(() => {
   }, 5000) // 5 segundos
   
   console.log('✅ Polling automático activado (cada 5 segundos)')
+  
+  // 🔔 LISTENER DE NOTIFICACIONES PUSH: Actualizar cuando llegue una notificación
+  if ('serviceWorker' in navigator) {
+    serviceWorkerMessageHandler = (event) => {
+      console.log('📨 Mensaje del Service Worker:', event.data)
+      
+      // Actualizar cuando LLEGUE una notificación (sin hacer clic)
+      if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED') {
+        const notifType = event.data?.notificationType
+        console.log('🔔 Nueva notificación push recibida:', notifType)
+        
+        if (notifType === 'friend-request' || notifType === 'friend_request') {
+          console.log('👥 ¡Nueva solicitud de amistad!')
+          console.log('🔄 Actualizando lista automáticamente...')
+          loadFriends()
+        }
+
+        if (notifType === 'friend-accepted' || notifType === 'friend_accepted') {
+          console.log('✅ Solicitud de amistad aceptada')
+          console.log('🔄 Actualizando lista automáticamente...')
+          loadFriends()
+        }
+      }
+      
+      // Actualizar cuando se HAGA CLIC en una notificación
+      if (event.data?.type === 'NOTIFICATION_CLICK') {
+        const notifType = event.data?.data?.type
+        console.log('🖱️ Click en notificación:', notifType)
+        
+        if (notifType === 'friend-request' || notifType === 'friend_request') {
+          console.log('👥 Abriendo solicitudes de amistad')
+          console.log('🔄 Actualizando lista...')
+          loadFriends()
+        }
+
+        if (notifType === 'friend-accepted' || notifType === 'friend_accepted') {
+          console.log('✅ Abriendo actualización de amistad aceptada')
+          console.log('🔄 Actualizando lista...')
+          loadFriends()
+        }
+      }
+    }
+
+    navigator.serviceWorker.addEventListener('message', serviceWorkerMessageHandler)
+    
+    console.log('✅ Listener de notificaciones push activado')
+  }
 })
 
 // Limpiar polling al salir
@@ -259,6 +304,10 @@ onUnmounted(() => {
   if (pollingInterval) {
     clearInterval(pollingInterval)
     console.log('🛑 Polling automático detenido')
+  }
+
+  if (serviceWorkerMessageHandler && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.removeEventListener('message', serviceWorkerMessageHandler)
   }
 })
 </script>

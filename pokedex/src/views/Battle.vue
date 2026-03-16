@@ -38,6 +38,7 @@ const seenCompletedBattles = ref(new Set())
 const seenActiveBattles = ref(new Set())
 const activeBattlePolling = ref(false)
 const battleAnimationInterval = ref(null)
+let serviceWorkerMessageHandler = null
 
 // Estados de batalla en tiempo real
 const realtimeBattle = ref(null)
@@ -106,6 +107,31 @@ onMounted(async () => {
   
   // Inicializar Socket.io
   initializeSocket()
+
+  if ('serviceWorker' in navigator) {
+    serviceWorkerMessageHandler = async (event) => {
+      const messageType = event.data?.type
+      const notificationType = event.data?.notificationType || event.data?.data?.type
+
+      if (!messageType || !notificationType) {
+        return
+      }
+
+      const isBattlePush = notificationType === 'battle-challenge' || notificationType === 'battle-accepted'
+      if (!isBattlePush) {
+        return
+      }
+
+      console.log('🔔 Mensaje del Service Worker para batalla:', event.data)
+      await loadChallenges()
+
+      if (notificationType === 'battle-challenge') {
+        playNotificationSound()
+      }
+    }
+
+    navigator.serviceWorker.addEventListener('message', serviceWorkerMessageHandler)
+  }
   
   await loadInitialData()
   await loadChallenges()
@@ -452,6 +478,10 @@ onUnmounted(() => {
   // Desconectar Socket.io
   if (socket.value) {
     socket.value.disconnect()
+  }
+
+  if (serviceWorkerMessageHandler && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.removeEventListener('message', serviceWorkerMessageHandler)
   }
 })
 

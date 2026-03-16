@@ -10,6 +10,46 @@ export function usePushNotifications() {
   const loading = ref(false);
   const error = ref(null);
 
+  async function getServiceWorkerRegistration() {
+    let registration = await navigator.serviceWorker.getRegistration();
+
+    if (!registration) {
+      registration = await navigator.serviceWorker.register('/sw.js');
+    }
+
+    await navigator.serviceWorker.ready;
+    return registration;
+  }
+
+  async function syncSubscriptionWithServer(sub) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const subscriptionJSON = typeof sub.toJSON === 'function'
+      ? sub.toJSON()
+      : JSON.parse(JSON.stringify(sub));
+
+    console.log('📤 Enviando suscripción al servidor...');
+    console.log('📦 Datos de suscripción:', {
+      endpoint: subscriptionJSON.endpoint.substring(0, 50) + '...',
+      keys: Object.keys(subscriptionJSON.keys || {})
+    });
+
+    const response = await api('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: subscriptionJSON })
+    });
+
+    subscription.value = sub;
+    isSubscribed.value = true;
+    console.log('✅ Respuesta del servidor:', response);
+
+    return response;
+  }
+
   // Verificar si el navegador soporta push notifications
   function checkSupport() {
     if (!('serviceWorker' in navigator)) {
@@ -105,8 +145,15 @@ export function usePushNotifications() {
         }
       }
 
-      // Obtener service worker registration
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await getServiceWorkerRegistration();
+
+      const existingSubscription = await registration.pushManager.getSubscription();
+      if (existingSubscription) {
+        console.log('📱 Reutilizando suscripción push existente');
+        await syncSubscriptionWithServer(existingSubscription);
+        console.log('✅ Suscripción existente sincronizada correctamente');
+        return existingSubscription;
+      }
 
       // Crear suscripción
       const sub = await registration.pushManager.subscribe({
@@ -114,32 +161,7 @@ export function usePushNotifications() {
         applicationServerKey: urlBase64ToUint8Array(publicKey.value)
       });
 
-      subscription.value = sub;
-
-      // Enviar suscripción al servidor
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('❌ No hay token de autenticación');
-        throw new Error('Not authenticated');
-      }
-
-      // Convertir suscripción a formato JSON serializable
-      const subscriptionJSON = sub.toJSON();
-      
-      console.log('📤 Enviando suscripción al servidor...');
-      console.log('📦 Datos de suscripción:', {
-        endpoint: subscriptionJSON.endpoint.substring(0, 50) + '...',
-        keys: Object.keys(subscriptionJSON.keys)
-      });
-
-      const response = await api('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: subscriptionJSON })
-      });
-
-      console.log('✅ Respuesta del servidor:', response);
-      isSubscribed.value = true;
+      await syncSubscriptionWithServer(sub);
       console.log('✅ Suscrito a push notifications correctamente');
 
       return sub;
@@ -166,8 +188,10 @@ export function usePushNotifications() {
       await subscription.value.unsubscribe();
 
       // Notificar al servidor
-      await api('/api/push/unsubscribe', 'POST', {
-        endpoint: subscription.value.endpoint
+      await api('/api/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: subscription.value.endpoint })
       });
 
       subscription.value = null;
@@ -189,13 +213,18 @@ export function usePushNotifications() {
         return;
       }
 
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await getServiceWorkerRegistration();
       const sub = await registration.pushManager.getSubscription();
 
       if (sub) {
         subscription.value = sub;
         isSubscribed.value = true;
         console.log('📱 Ya está suscrito a push notifications');
+
+        if (localStorage.getItem('token')) {
+          await syncSubscriptionWithServer(sub);
+          console.log('🔄 Suscripción sincronizada con el backend');
+        }
       } else {
         isSubscribed.value = false;
         console.log('📱 No está suscrito a push notifications');
@@ -236,8 +265,16 @@ export function usePushNotifications() {
 
       // Esperar a que el Service Worker esté ready
       console.log('⏳ Esperando Service Worker...');
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await getServiceWorkerRegistration();
       console.log('✅ Service Worker ready:', registration.scope);
+
+      const existingSubscription = await registration.pushManager.getSubscription();
+      if (existingSubscription) {
+        console.log('📱 Se encontró una suscripción existente, sincronizando...');
+        await syncSubscriptionWithServer(existingSubscription);
+        console.log('✅✅✅ SUSCRIPCIÓN EXISTENTE SINCRONIZADA');
+        return true;
+      }
 
       // Verificar si ya tiene permiso concedido
       if (Notification.permission === 'granted') {
@@ -253,27 +290,10 @@ export function usePushNotifications() {
         }
       }
 
-      // Si el permiso está en "default", solicitarlo automáticamente
+      // Si el permiso está en "default", esperar activación manual para evitar prompts bloqueados
       if (Notification.permission === 'default') {
-        console.log('📱 Solicitando permiso de notificaciones...');
-        const permission = await Notification.requestPermission();
-        console.log('📋 Permiso resultado:', permission);
-        
-        if (permission === 'granted') {
-          console.log('✅ Permiso concedido, suscribiendo...');
-          try {
-            await subscribe();
-            console.log('✅✅✅ SUSCRIPCIÓN EXITOSA');
-            return true;
-          } catch (subError) {
-            console.error('❌ Error al suscribirse después de conceder permiso:', subError);
-            console.error('Stack trace:', subError.stack);
-            return false;
-          }
-        } else if (permission === 'denied') {
-          console.info('ℹ️ Usuario denegó permisos de notificación');
-          return false;
-        }
+        console.info('ℹ️ Permiso pendiente. Esperando activación manual desde la UI.');
+        return false;
       }
 
       // Si el permiso fue denegado, no hacer nada

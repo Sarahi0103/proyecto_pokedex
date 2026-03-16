@@ -345,6 +345,21 @@ self.addEventListener('push', event => {
       actions: notificationData.actions || [],
       requireInteraction: notificationData.requireInteraction || false,
       vibrate: [200, 100, 200]
+    }).then(() => {
+      // 🔔 NOTIFICAR A TODOS LOS CLIENTES: Enviar mensaje para actualizar datos
+      console.log('[SW] 📤 Enviando mensaje a todos los clientes...');
+      return clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then(clientList => {
+          console.log(`[SW] 👥 Encontrados ${clientList.length} clientes activos`);
+          clientList.forEach(client => {
+            client.postMessage({
+              type: 'PUSH_NOTIFICATION_RECEIVED',
+              notificationType: notificationData.data?.type || 'unknown',
+              data: notificationData.data || {}
+            });
+            console.log('[SW] ✅ Mensaje enviado al cliente:', client.id);
+          });
+        });
     })
   );
 });
