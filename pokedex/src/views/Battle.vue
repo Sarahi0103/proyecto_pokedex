@@ -478,14 +478,13 @@ async function handleBattleDeepLink(battleId, action = 'view') {
   let targetChallenge = null
 
   // Reintentos: evita falsos negativos cuando llegas desde notificación y la API tarda en reflejar el reto
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     await loadChallenges()
-    targetChallenge = challenges.value.find(c => {
-      return normalizeId(c.id) === normalizedBattleId && isCurrentUserParticipant(c, userInfo)
-    })
+    // La API /api/battles/challenges ya devuelve solo batallas del usuario autenticado
+    targetChallenge = challenges.value.find(c => normalizeId(c.id) === normalizedBattleId)
 
     if (targetChallenge) break
-    await sleep(500)
+    await sleep(700)
   }
 
   // Si venimos desde acción aceptar y no llegó por id, mostrar cualquier reto pendiente mío en interfaz
@@ -502,8 +501,18 @@ async function handleBattleDeepLink(battleId, action = 'view') {
     return
   }
 
+  // Si viene de acción aceptar, evitar mensaje de "no disponible" cuando todavía sincroniza
+  if (!targetChallenge && action === 'accept') {
+    return
+  }
+
   if (!targetChallenge) {
     showNotification('⚠️ Batalla no disponible', 'No se encontró ese desafío o ya no está activo')
+    return
+  }
+
+  if (action === 'accept' && targetChallenge.status === 'pending' && isCurrentUserChallenger(targetChallenge, userInfo)) {
+    showNotification('📤 Desafío enviado', 'Este reto lo enviaste tú. Espera a que tu rival lo acepte')
     return
   }
 
@@ -524,8 +533,8 @@ function showNotification(title, body) {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(title, {
       body: body,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-96x96.png',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-96.png',
       tag: 'battle-challenge'
     })
   }
