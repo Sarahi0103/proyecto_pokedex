@@ -548,8 +548,15 @@ async function getPendingChallenges(userId) {
      JOIN users u2 ON bc.opponent_id = u2.id
      WHERE (bc.challenger_id = $1 OR bc.opponent_id = $1) 
      AND bc.status IN ('pending', 'accepted', 'in_progress', 'completed')
-     ORDER BY bc.created_at DESC
-     LIMIT 50`,
+     ORDER BY
+       CASE bc.status
+         WHEN 'pending' THEN 0
+         WHEN 'accepted' THEN 1
+         WHEN 'in_progress' THEN 2
+         WHEN 'completed' THEN 3
+         ELSE 4
+       END,
+       bc.created_at DESC`,
     [userId]
   );
   
