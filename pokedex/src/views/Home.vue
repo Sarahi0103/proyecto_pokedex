@@ -8,7 +8,8 @@ const q = ref('')
 const pokemons = ref([])
 const allPokemons = ref([])
 const loading = ref(false)
-const selectedType = ref('')
+const selectedType1 = ref('')
+const selectedType2 = ref('')
 const selectedRegion = ref('')
 
 const regions = [
@@ -77,11 +78,14 @@ function filterPokemons(){
     )
   }
   
-  // Filter by type
-  if(selectedType.value){
-    filtered = filtered.filter(p => 
-      p.types?.some(t => t.type.name === selectedType.value)
-    )
+  // Filter by type slot 1 (primary type)
+  if(selectedType1.value){
+    filtered = filtered.filter(p => p.types?.[0]?.type?.name === selectedType1.value)
+  }
+
+  // Filter by type slot 2 (secondary type)
+  if(selectedType2.value){
+    filtered = filtered.filter(p => p.types?.[1]?.type?.name === selectedType2.value)
   }
   
   pokemons.value = filtered
@@ -141,10 +145,20 @@ onMounted(load)
         </div>
 
         <div class="filter-card">
-          <label class="filter-label">⚡ Tipo</label>
-          <select v-model="selectedType" @change="filterPokemons" class="pokemon-select">
+          <label class="filter-label">⚡ Tipo 1</label>
+          <select v-model="selectedType1" @change="filterPokemons" class="pokemon-select">
             <option value="">Todos los Tipos</option>
             <option v-for="type in types" :key="type" :value="type">
+              {{ type.toUpperCase() }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-card">
+          <label class="filter-label">✨ Tipo 2</label>
+          <select v-model="selectedType2" @change="filterPokemons" class="pokemon-select">
+            <option value="">Todos los Tipos</option>
+            <option v-for="type in types" :key="`secondary-${type}`" :value="type">
               {{ type.toUpperCase() }}
             </option>
           </select>
