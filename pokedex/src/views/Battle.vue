@@ -31,6 +31,7 @@ const notifications = ref([])
 const notificationSound = ref(null)
 const sendingChallenge = ref(false)
 const challengeActionState = ref({})
+const selectingChallengeTeam = ref(false)
 const audioContextRef = ref(null)
 const audioUnlocked = ref(false)
 const showBattleAnimation = ref(false)
@@ -71,6 +72,24 @@ function clearChallengeActionState(challengeId) {
 
 function getChallengeActionState(challengeId) {
   return challengeActionState.value[challengeId] || null
+}
+
+function setChallengeTeamSelection(challengeId, rawValue) {
+  if (rawValue === '' || rawValue === null || rawValue === undefined) {
+    challengeTeamSelections.value[challengeId] = ''
+    return
+  }
+
+  const parsedValue = Number(rawValue)
+  challengeTeamSelections.value[challengeId] = Number.isFinite(parsedValue) ? parsedValue : ''
+}
+
+function startSelectingChallengeTeam() {
+  selectingChallengeTeam.value = true
+}
+
+function stopSelectingChallengeTeam() {
+  selectingChallengeTeam.value = false
 }
 
 function getAudioContextInstance() {
@@ -240,6 +259,10 @@ onMounted(async () => {
   
   // Polling más frecuente para detectar desafíos rápido
   pollingInterval.value = setInterval(async () => {
+    if (selectingChallengeTeam.value) {
+      return
+    }
+
     const userInfo = getCurrentUserInfo()
     const oldCount = previousChallengesCount.value
     await loadChallenges()
@@ -1536,19 +1559,9 @@ const mySentChallenges = computed(() => {
   })
 })
 
-const acceptedBattles = computed(() => {
-  const userInfo = getCurrentUserInfo()
-  return challenges.value.filter(c => {
-    if (c.status !== 'accepted') return false
-    // Solo mostrar batallas donde soy participante
-    return isCurrentUserParticipant(c, userInfo)
-  })
-})
-
 const battleCounters = computed(() => ({
   received: myPendingChallenges.value.length,
   sent: mySentChallenges.value.length,
-  ready: acceptedBattles.value.length,
   total: challenges.value.length
 }))
 
@@ -1584,8 +1597,6 @@ function debugBattleSystem() {
   console.log('Total desafíos:', challenges.value.length)
   console.log('Mis desafíos pendientes:', myPendingChallenges.value.length)
   console.log('Mis desafíos enviados:', mySentChallenges.value.length)
-  console.log('Batallas aceptadas:', acceptedBattles.value.length)
-  
   console.log('\n📋 Todos los desafíos:')
   challenges.value.forEach((c, i) => {
     console.log(`  ${i}: ID=${c.id} | Status=${c.status} | ${c.challenger_email} -> ${c.opponent_email}`)
@@ -1987,10 +1998,6 @@ function debugBattleSystem() {
             <div class="counter-label">Desafíos Enviados</div>
             <div class="counter-value">{{ battleCounters.sent }}</div>
           </div>
-          <div class="counter-card">
-            <div class="counter-label">Batallas Listas</div>
-            <div class="counter-value">{{ battleCounters.ready }}</div>
-          </div>
         </div>
       </div>
 
@@ -2016,8 +2023,17 @@ function debugBattleSystem() {
             </div>
             <div class="challenge-team-picker">
               <label class="challenge-team-label">Elige tu equipo para esta batalla</label>
-              <select v-model="challengeTeamSelections[challenge.id]" class="challenge-team-select" :disabled="myTeams.length === 0">
-                <option :value="undefined">-- Selecciona tu equipo --</option>
+              <select
+                :value="challengeTeamSelections[challenge.id] ?? ''"
+                class="challenge-team-select"
+                :disabled="myTeams.length === 0"
+                @focus="startSelectingChallengeTeam"
+                @mousedown="startSelectingChallengeTeam"
+                @click="startSelectingChallengeTeam"
+                @change="setChallengeTeamSelection(challenge.id, $event.target.value); stopSelectingChallengeTeam()"
+                @blur="stopSelectingChallengeTeam"
+              >
+                <option value="">-- Selecciona tu equipo --</option>
                 <option v-for="(team, index) in myTeams" :key="`${challenge.id}-${index}`" :value="index">
                   {{ team.name || `Equipo ${index + 1}` }} ({{ (team.pokemons || []).length }} Pokémon)
                 </option>
@@ -2056,34 +2072,6 @@ function debugBattleSystem() {
             <div class="challenge-actions">
               <button class="btn btn-outline" @click="cancelChallenge(challenge)" :disabled="!!getChallengeActionState(challenge.id)">
                 {{ getChallengeActionState(challenge.id) === 'cancel' ? '⏳ Cancelando...' : '🗑️ Cancelar' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Batallas Aceptadas -->
-      <div class="challenges-section">
-        <h3>⚔️ Batallas Listas ({{ acceptedBattles.length }})</h3>
-        <p class="section-description">Ambos jugadores han seleccionado sus equipos. Se iniciará automáticamente cuando aparezca y también puedes iniciarla manualmente.</p>
-        <div v-if="acceptedBattles.length === 0" class="empty-inline-state">
-          Aún no hay batallas aceptadas.
-        </div>
-        <div v-else class="challenges-grid">
-          <div v-for="battle in acceptedBattles" :key="battle.id" class="challenge-card ready">
-            <div class="challenge-header">
-              <span class="challenge-from">
-                ⚔️ {{ battle.challenger_name }} VS {{ battle.opponent_name }}
-              </span>
-              <span class="challenge-status ready">¡Ambos listos!</span>
-            </div>
-            <div class="battle-ready-info">
-              <div class="ready-check">✓ Equipos seleccionados</div>
-              <div class="ready-check">✓ Esperando ejecución</div>
-            </div>
-            <div class="challenge-actions">
-              <button class="btn btn-accent" @click="openAcceptedBattle(battle.id)" :disabled="battling">
-                🎮 Ejecutar Batalla
               </button>
             </div>
           </div>
