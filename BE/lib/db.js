@@ -540,7 +540,9 @@ async function getPendingChallenges(userId) {
   const result = await pool.query(
     `SELECT bc.*, 
             u1.id as challenger_user_id, u1.name as challenger_name, u1.code as challenger_code, u1.email as challenger_email,
-            u2.id as opponent_user_id, u2.name as opponent_name, u2.code as opponent_code, u2.email as opponent_email
+            u2.id as opponent_user_id, u2.name as opponent_name, u2.code as opponent_code, u2.email as opponent_email,
+            (bc.challenger_id = $1) as is_challenger,
+            (bc.opponent_id = $1) as is_opponent
      FROM battle_challenges bc
      JOIN users u1 ON bc.challenger_id = u1.id
      JOIN users u2 ON bc.opponent_id = u2.id
@@ -554,7 +556,12 @@ async function getPendingChallenges(userId) {
   // Parsear battle_result si existe
   return result.rows.map(row => {
     if (row.battle_result && typeof row.battle_result === 'string') {
-      row.battle_result = JSON.parse(row.battle_result);
+      try {
+        row.battle_result = JSON.parse(row.battle_result);
+      } catch (error) {
+        // Evita romper toda la lista por un registro historico corrupto
+        row.battle_result = null;
+      }
     }
     return row;
   });
@@ -602,7 +609,11 @@ async function getBattleById(battleId) {
   if (battle && battle.battle_result) {
     // Asegurar que battle_result est├® parseado como objeto
     if (typeof battle.battle_result === 'string') {
-      battle.battle_result = JSON.parse(battle.battle_result);
+      try {
+        battle.battle_result = JSON.parse(battle.battle_result);
+      } catch (error) {
+        battle.battle_result = null;
+      }
     }
   }
   return battle;

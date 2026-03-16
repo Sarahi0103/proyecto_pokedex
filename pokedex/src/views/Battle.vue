@@ -447,7 +447,21 @@ function normalizeEmail(value) {
   return email || null
 }
 
+function asBoolean(value) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'true' || normalized === 't' || normalized === '1'
+  }
+  return false
+}
+
 function isCurrentUserOpponent(challenge, userInfo) {
+  if (challenge && challenge.is_opponent !== undefined && challenge.is_opponent !== null) {
+    return asBoolean(challenge.is_opponent)
+  }
+
   const userId = normalizeId(userInfo.id)
   if (userId !== null) {
     const opponentUserId = normalizeId(challenge.opponent_user_id)
@@ -458,6 +472,10 @@ function isCurrentUserOpponent(challenge, userInfo) {
 }
 
 function isCurrentUserChallenger(challenge, userInfo) {
+  if (challenge && challenge.is_challenger !== undefined && challenge.is_challenger !== null) {
+    return asBoolean(challenge.is_challenger)
+  }
+
   const userId = normalizeId(userInfo.id)
   if (userId !== null) {
     const challengerUserId = normalizeId(challenge.challenger_user_id)
