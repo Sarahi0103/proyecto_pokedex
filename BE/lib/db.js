@@ -254,6 +254,44 @@ async function getFriends(userId) {
   }
 }
 
+async function areUsersFriends(userIdA, userIdB) {
+  const normalizedA = Number(userIdA);
+  const normalizedB = Number(userIdB);
+
+  if (!Number.isInteger(normalizedA) || !Number.isInteger(normalizedB)) {
+    return false;
+  }
+
+  if (normalizedA === normalizedB) {
+    return false;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT 1
+       FROM friends
+       WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
+         AND status = 'accepted'
+       LIMIT 1`,
+      [normalizedA, normalizedB]
+    );
+    return result.rows.length > 0;
+  } catch (error) {
+    // Compatibilidad con esquemas antiguos donde no existe columna status
+    if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
+      const fallback = await pool.query(
+        `SELECT 1
+         FROM friends
+         WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+         LIMIT 1`,
+        [normalizedA, normalizedB]
+      );
+      return fallback.rows.length > 0;
+    }
+    throw error;
+  }
+}
+
 async function addFriend(userId, friendId) {
   // Intentar con status (nueva versi├│n con migraci├│n)
   try {
@@ -1090,6 +1128,7 @@ module.exports = {
   updateTeam,
   deleteTeam,
   getFriends,
+  areUsersFriends,
   addFriend,
   getPendingFriendRequests,
   getSentFriendRequests,

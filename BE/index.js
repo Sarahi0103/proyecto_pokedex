@@ -24,6 +24,7 @@ const {
   updateTeam,
   deleteTeam,
   getFriends,
+  areUsersFriends,
   addFriend,
   getPendingFriendRequests,
   getSentFriendRequests,
@@ -1029,6 +1030,11 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
     if (opponentCode === undefined || teamIndex === undefined) {
       return res.status(400).json({ error: 'opponentCode and teamIndex required' });
     }
+
+    const teamIndexNumber = Number(teamIndex);
+    if (!Number.isInteger(teamIndexNumber) || teamIndexNumber < 0) {
+      return res.status(400).json({ error: 'Invalid team index' });
+    }
     
     console.log('⚔️ Creando desafío:');
     console.log('  - Retador email:', req.user.email);
@@ -1048,8 +1054,47 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
     if (opponent.id === user.id) {
       return res.status(400).json({ error: 'Cannot challenge yourself' });
     }
+
+    const areFriends = await areUsersFriends(user.id, opponent.id);
+    if (!areFriends) {
+      return res.status(403).json({ error: 'You can only challenge accepted friends' });
+    }
+
+    const challengerTeams = await getTeams(user.id);
+    const selectedTeam = challengerTeams[teamIndexNumber];
+    if (!selectedTeam) {
+      return res.status(400).json({ error: 'Selected team does not exist' });
+    }
+    if (!Array.isArray(selectedTeam.pokemons) || selectedTeam.pokemons.length === 0) {
+      return res.status(400).json({ error: 'Selected team is empty' });
+    }
+
+    const pendingBetweenUsers = await pool.query(
+      `SELECT id, challenger_id, opponent_id
+       FROM battle_challenges
+       WHERE status = 'pending'
+         AND ((challenger_id = $1 AND opponent_id = $2) OR (challenger_id = $2 AND opponent_id = $1))
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [user.id, opponent.id]
+    );
+
+    if (pendingBetweenUsers.rows[0]) {
+      const existing = pendingBetweenUsers.rows[0];
+      if (existing.challenger_id === user.id) {
+        return res.status(200).json({
+          battle: { id: existing.id },
+          message: 'You already have a pending challenge for this opponent'
+        });
+      }
+
+      return res.status(409).json({
+        error: 'You already have a pending challenge from this opponent. Accept or reject it first.',
+        battleId: existing.id
+      });
+    }
     
-    const battle = await createBattleChallenge(user.id, opponent.id, teamIndex);
+    const battle = await createBattleChallenge(user.id, opponent.id, teamIndexNumber);
     console.log('  - Desafío creado con ID:', battle?.id);
     
     // Notificar al oponente en tiempo real
@@ -1106,6 +1151,11 @@ app.post('/api/battles/:battleId/accept', authMiddleware, async (req, res) => {
     if (teamIndex === undefined || teamIndex === null) {
       return res.status(400).json({ error: 'Debes seleccionar un equipo para aceptar el desafío' });
     }
+
+    const teamIndexNumber = Number(teamIndex);
+    if (!Number.isInteger(teamIndexNumber) || teamIndexNumber < 0) {
+      return res.status(400).json({ error: 'Índice de equipo inválido' });
+    }
     
     const user = await getUserByEmail(req.user.email);
     console.log(`✅ Usuario aceptando desafío:`, user.name, '| ID:', user.id);
@@ -1116,9 +1166,22 @@ app.post('/api/battles/:battleId/accept', authMiddleware, async (req, res) => {
     if (!battle || battle.opponent_id !== user.id) {
       return res.status(403).json({ error: 'No autorizado - solo el oponente puede aceptar' });
     }
+
+    if (battle.status !== 'pending') {
+      return res.status(400).json({ error: `Battle is not pending (current status: ${battle.status})` });
+    }
+
+    const opponentTeams = await getTeams(user.id);
+    const selectedTeam = opponentTeams[teamIndexNumber];
+    if (!selectedTeam) {
+      return res.status(400).json({ error: 'El equipo seleccionado no existe' });
+    }
+    if (!Array.isArray(selectedTeam.pokemons) || selectedTeam.pokemons.length === 0) {
+      return res.status(400).json({ error: 'No puedes aceptar con un equipo vacío' });
+    }
     
-    console.log(`🎮 Aceptando con equipo index:`, teamIndex);
-    await acceptBattleChallenge(battleId, teamIndex);
+    console.log(`🎮 Aceptando con equipo index:`, teamIndexNumber);
+    await acceptBattleChallenge(battleId, teamIndexNumber);
     
     // Notificar al retador que su desafío fue aceptado
     notifyUser(io, battle.challenger_id, 'challenge-accepted', {
@@ -1154,6 +1217,10 @@ app.post('/api/battles/:battleId/reject', authMiddleware, async (req, res) => {
     
     if (!battle || battle.opponent_id !== user.id) {
       return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    if (battle.status !== 'pending') {
+      return res.status(400).json({ error: `Battle is not pending (current status: ${battle.status})` });
     }
     
     await rejectBattleChallenge(battleId);
@@ -1239,7 +1306,7 @@ app.post('/api/battles/:battleId/execute', authMiddleware, async (req, res) => {
     }
     
     // Verificar que el usuario es parte de la batalla
-    if (battle.challenger_user_id !== user.id && battle.opponent_user_id !== user.id) {
+    if (battle.challenger_id !== user.id && battle.opponent_id !== user.id) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     
@@ -1301,7 +1368,7 @@ app.get('/api/battles/:battleId/result', authMiddleware, async (req, res) => {
     }
     
     // Verificar que el usuario es parte de la batalla
-    if (battle.challenger_user_id !== user.id && battle.opponent_user_id !== user.id) {
+    if (battle.challenger_id !== user.id && battle.opponent_id !== user.id) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     

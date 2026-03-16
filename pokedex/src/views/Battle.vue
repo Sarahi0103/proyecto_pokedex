@@ -659,13 +659,14 @@ async function sendChallenge() {
     
     console.log('✅ Respuesta del servidor:', response)
     
-    showNotification('⚔️ ¡Desafío enviado!', `Esperando respuesta de ${selectedFriend.value.name}`)
+    const challengeMessage = response?.message || `Esperando respuesta de ${selectedFriend.value.name}`
+    showNotification('⚔️ Estado del desafío', challengeMessage)
     selectedTeam.value = null
     selectedFriend.value = null
     await loadChallenges()
   } catch (e) {
     console.error('❌ Error enviando desafío:', e)
-    showNotification('❌ Error', 'No se pudo enviar el desafío')
+    showNotification('❌ Error', e.message || 'No se pudo enviar el desafío')
   }
 }
 
@@ -740,7 +741,7 @@ async function rejectChallenge(challenge) {
     await loadChallenges()
   } catch (e) {
     console.error(e)
-    showNotification('❌ Error', 'No se pudo eliminar el desafío')
+    showNotification('❌ Error', e.message || 'No se pudo rechazar el desafío')
   }
 }
 
@@ -758,7 +759,7 @@ async function cancelChallenge(challenge) {
     await loadChallenges()
   } catch (e) {
     console.error(e)
-    showNotification('❌ Error', 'No se pudo cancelar el desafío')
+    showNotification('❌ Error', e.message || 'No se pudo cancelar el desafío')
   }
 }
 
@@ -1726,7 +1727,7 @@ function debugBattleSystem() {
                 ✓ Aceptar
               </button>
               <button class="btn btn-danger" @click="rejectChallenge(challenge)">
-                ✗ Eliminar
+                ✗ Rechazar
               </button>
             </div>
           </div>
