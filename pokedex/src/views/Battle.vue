@@ -518,6 +518,10 @@ async function handleBattleDeepLink(battleId, action = 'view') {
     await sleep(700)
   }
 
+  if (!targetChallenge) {
+    targetChallenge = await hydrateChallengeFromBattleId(normalizedBattleId)
+  }
+
   // Si venimos desde acción aceptar y no llegó por id, mostrar cualquier reto pendiente mío en interfaz
   if (!targetChallenge && action === 'accept') {
     const fallbackPending = challenges.value.find(c => c.status === 'pending' && isCurrentUserOpponent(c, userInfo))
@@ -540,6 +544,19 @@ async function handleBattleDeepLink(battleId, action = 'view') {
   if (!targetChallenge) {
     showNotification('⚠️ Batalla no disponible', 'No se encontró ese desafío o ya no está activo')
     return
+  }
+
+  if (targetChallenge.status === 'pending') {
+    if (isCurrentUserOpponent(targetChallenge, userInfo)) {
+      highlightedIncomingChallengeId.value = targetChallenge.id
+      showNotification('✅ Desafío recibido', 'Selecciona tu equipo y presiona "Aceptar" o "Rechazar"')
+      return
+    }
+
+    if (isCurrentUserChallenger(targetChallenge, userInfo)) {
+      showNotification('📤 Desafío enviado', 'Tu rival aún no responde. Espera aceptación o rechazo.')
+      return
+    }
   }
 
   if (action === 'accept' && targetChallenge.status === 'pending' && isCurrentUserChallenger(targetChallenge, userInfo)) {
@@ -646,10 +663,61 @@ async function loadInitialData() {
   }
 }
 
+function upsertChallenge(challenge) {
+  if (!challenge || challenge.id === undefined || challenge.id === null) return
+  const existingIndex = challenges.value.findIndex(c => normalizeId(c.id) === normalizeId(challenge.id))
+  if (existingIndex >= 0) {
+    challenges.value[existingIndex] = {
+      ...challenges.value[existingIndex],
+      ...challenge
+    }
+  } else {
+    challenges.value.unshift(challenge)
+  }
+}
+
+async function hydrateChallengeFromBattleId(battleId) {
+  const normalizedBattleId = normalizeId(battleId)
+  if (normalizedBattleId === null) return null
+
+  try {
+    const data = await api(`/api/battles/${normalizedBattleId}`)
+    const battle = data?.battle
+    if (!battle) return null
+
+    const hydrated = {
+      ...battle,
+      id: battle.id,
+      challenger_user_id: battle.challenger_user_id ?? battle.challenger_id,
+      opponent_user_id: battle.opponent_user_id ?? battle.opponent_id,
+      challenger_name: battle.challenger_name,
+      opponent_name: battle.opponent_name,
+      challenger_email: battle.challenger_email || null,
+      opponent_email: battle.opponent_email || null,
+      is_challenger: !!data?.isChallenger,
+      is_opponent: !data?.isChallenger
+    }
+
+    upsertChallenge(hydrated)
+    return hydrated
+  } catch (e) {
+    // Si no pertenece al usuario o no existe, seguimos sin bloquear la UI
+    return null
+  }
+}
+
 async function loadChallenges() {
   try {
     const data = await api('/api/battles/challenges')
     challenges.value = data.challenges || []
+
+    const routeBattleId = normalizeId(route.query.id)
+    if (routeBattleId !== null) {
+      const hasRouteBattle = challenges.value.some(c => normalizeId(c.id) === routeBattleId)
+      if (!hasRouteBattle) {
+        await hydrateChallengeFromBattleId(routeBattleId)
+      }
+    }
     
     const userInfo = getCurrentUserInfo()
     // Logs comentados para evitar spam en consola
@@ -691,6 +759,11 @@ async function sendChallenge() {
 
     if (response?.action === 'incoming_pending' && response?.battle?.id) {
       highlightedIncomingChallengeId.value = response.battle.id
+      await hydrateChallengeFromBattleId(response.battle.id)
+    }
+
+    if (response?.action === 'pending_already_sent' && response?.battle?.id) {
+      await hydrateChallengeFromBattleId(response.battle.id)
     }
 
     if (response?.action === 'incoming_pending') {
