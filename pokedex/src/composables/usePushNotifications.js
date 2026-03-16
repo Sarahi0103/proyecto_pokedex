@@ -228,6 +228,16 @@ export function usePushNotifications() {
       } else {
         isSubscribed.value = false;
         console.log('📱 No está suscrito a push notifications');
+
+        if (Notification.permission === 'granted' && localStorage.getItem('token')) {
+          console.log('🔄 Permiso concedido pero sin suscripción. Recreando suscripción push...');
+          try {
+            await subscribe();
+            console.log('✅✅✅ SUSCRIPCIÓN RECREADA Y SINCRONIZADA');
+          } catch (recreateError) {
+            console.error('❌ Error recreando suscripción push:', recreateError);
+          }
+        }
       }
     } catch (err) {
       console.error('Error verificando suscripción:', err);
