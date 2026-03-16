@@ -354,9 +354,9 @@ app.get('/api/run-migration', async (req, res) => {
 app.post('/auth/register', authLimiter, async (req,res)=>{
   try{
     const { email, password, name } = req.body;
-    if(!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if(!email || !password) return res.status(400).json({ error: 'Email y contraseña son requeridos' });
     const existing = await getUserByEmail(email);
-    if(existing) return res.status(400).json({ error: 'User exists' });
+    if(existing) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
     const hash = await bcrypt.hash(password, 10);
     const user = {
       email,

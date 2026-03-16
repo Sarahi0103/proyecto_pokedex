@@ -24,8 +24,8 @@ export function validateTeamName(name) {
 }
 
 export function validateName(name) {
-  // Nombre: 2-30 caracteres, solo letras y espacios
-  return name && name.trim().length >= 2 && name.trim().length <= 30 && /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(name.trim())
+  // Nombre: 2-50 caracteres, letras, espacios, guiones, apóstrofes y puntos
+  return name && name.trim().length >= 2 && name.trim().length <= 50 && /^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s'\-\.]+$/.test(name.trim())
 }
 
 export function validatePokemonCount(count) {
@@ -84,7 +84,9 @@ export function validateRegisterForm(email, password, confirmPassword, name) {
   }
 
   if (!name.trim()) {
-    errors.push({ field: 'name', message: validationMessages.username.required })
+    errors.push({ field: 'name', message: 'El nombre es requerido' })
+  } else if (!validateName(name)) {
+    errors.push({ field: 'name', message: 'El nombre solo puede contener letras, espacios, guiones o apóstrofes (2-50 caracteres)' })
   }
 
   return errors

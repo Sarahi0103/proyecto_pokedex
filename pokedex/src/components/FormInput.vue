@@ -203,6 +203,11 @@ function togglePassword() {
   color: var(--gray-500);
 }
 
+/* Ocultar el botón nativo × de Edge/IE para no confundir con los íconos de validación */
+.input-field::-ms-clear {
+  display: none;
+}
+
 .input-field:disabled {
   background: var(--gray-100);
   color: var(--gray-500);
