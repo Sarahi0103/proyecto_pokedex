@@ -56,6 +56,7 @@ const selectedMove = ref(null)
 const availableMoves = ref([])
 const isPlayerTurn = ref(false)
 const turnResult = ref(null)
+const latestBattleOutcome = ref(null)
 
 function setChallengeActionState(challengeId, action) {
   challengeActionState.value = {
@@ -429,15 +430,20 @@ function initializeSocket() {
     // Verificar si terminó
     if (data.ended) {
       setTimeout(() => {
-        showBattleEndNotification({
+        const battleEndPayload = {
+          battle_id: realtimeBattle.value?.battleId,
           battle_result: {
             winner_name: data.winnerName,
+            loser_name: data.winner === 'player1' ? realtimeBattle.value?.player2Name : realtimeBattle.value?.player1Name,
             turns: data.turn
           },
           winner_id: data.winner === 'player1'
             ? realtimeBattle.value?.player1Id
             : realtimeBattle.value?.player2Id
-        })
+        }
+
+        storeBattleOutcome(battleEndPayload)
+        showBattleEndNotification(battleEndPayload)
         isInRealtimeBattle.value = false
         leaveRealtimeBattle()
       }, 3000)
@@ -460,6 +466,15 @@ function initializeSocket() {
   })
 
   socket.value.on('battle-completed', async (data) => {
+    storeBattleOutcome({
+      battle_id: data?.battleId,
+      winner_id: data?.winner_id,
+      battle_result: {
+        winner_name: data?.winner_name,
+        loser_name: data?.loser_name
+      }
+    })
+
     showNotification(
       Number(currentUser()?.id) === Number(data?.winner_id) ? '🎉 ¡Victoria!' : '💥 Batalla finalizada',
       `${data?.winner_name || 'Alguien'} ganó la batalla`
@@ -488,6 +503,7 @@ function joinRealtimeBattle(battleId) {
   // console.log('🎮 Uniéndose a batalla en tiempo real:', battleId)
   
   socket.value.emit('join-battle', { battleId, userId })
+  latestBattleOutcome.value = null
   isInRealtimeBattle.value = true
   showBattleAnimation.value = true
   waitingForOpponent.value = true
@@ -763,6 +779,27 @@ function playNotificationSound() {
 
 function removeNotification(id) {
   notifications.value = notifications.value.filter(n => n.id !== id)
+}
+
+function storeBattleOutcome(result) {
+  const me = currentUser()
+  const winnerId = result?.winner_id || result?.battle_result?.winner_id
+  const winnerName = result?.battle_result?.winner_name || result?.winner_name || 'Ganador'
+  const loserName = result?.battle_result?.loser_name || result?.loser_name || 'tu rival'
+  const turns = result?.battle_result?.turns || result?.turns || null
+  const battleId = result?.battle_id || result?.battleId || null
+
+  const isWinner = !!(me?.id && winnerId && Number(me.id) === Number(winnerId))
+
+  latestBattleOutcome.value = {
+    isWinner,
+    title: isWinner ? 'VICTORIA' : 'DERROTA',
+    subtitle: isWinner
+      ? `Derrotaste a ${loserName}`
+      : `${winnerName} ganó esta batalla`,
+    turns,
+    battleId
+  }
 }
 
 onUnmounted(() => {
@@ -1475,6 +1512,8 @@ async function pollBattleResult(battleId) {
 }
 
 function showBattleEndNotification(result) {
+  storeBattleOutcome(result)
+
   const me = currentUser()
   const winnerId = result?.winner_id || result?.battle_result?.winner_id
   const loserName = result?.battle_result?.loser_name || 'el oponente'
@@ -1882,6 +1921,18 @@ function debugBattleSystem() {
       </div>
     </div>
 
+    <div v-if="latestBattleOutcome" class="battle-outcome-banner" :class="latestBattleOutcome.isWinner ? 'win' : 'lose'">
+      <div class="outcome-main">
+        <div class="outcome-badge">{{ latestBattleOutcome.title }}</div>
+        <div class="outcome-subtitle">{{ latestBattleOutcome.subtitle }}</div>
+      </div>
+      <div class="outcome-meta">
+        <span v-if="latestBattleOutcome.turns">Turnos: {{ latestBattleOutcome.turns }}</span>
+        <span v-if="latestBattleOutcome.battleId">Batalla #{{ latestBattleOutcome.battleId }}</span>
+      </div>
+      <button class="outcome-close-btn" @click="latestBattleOutcome = null">×</button>
+    </div>
+
     <div v-if="loading" class="pokemon-loading">
       <div class="loading-pokeball">
         <div class="pokeball-spin">⚪</div>
@@ -1934,7 +1985,7 @@ function debugBattleSystem() {
       <div v-if="battleResult" class="battle-result">
         <div class="result-content">
           <div class="result-icon">🏆</div>
-          <h2>{{ battleResult.battle_result?.winner_name || 'Ganador' }} GANA!</h2>
+          <h2>{{ Number(currentUser()?.id) === Number(battleResult.winner_id || battleResult.battle_result?.winner_id) ? 'VICTORIA' : 'DERROTA' }}</h2>
           <p class="result-subtitle" v-if="battleResult.battle_result?.loser_name">
             {{ battleResult.battle_result.winner_name }} derrotó a {{ battleResult.battle_result.loser_name }}
           </p>
@@ -2968,6 +3019,70 @@ function debugBattleSystem() {
   font-weight: 600;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
   margin: 0;
+}
+
+.battle-outcome-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+.battle-outcome-banner.win {
+  background: linear-gradient(120deg, #0ea45f 0%, #0a7e48 100%);
+}
+
+.battle-outcome-banner.lose {
+  background: linear-gradient(120deg, #d14545 0%, #a32626 100%);
+}
+
+.outcome-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.outcome-badge {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.outcome-subtitle {
+  font-size: 14px;
+  opacity: 0.96;
+}
+
+.outcome-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.95;
+}
+
+.outcome-close-btn {
+  border: none;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.outcome-close-btn:hover {
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .battle-counters {
