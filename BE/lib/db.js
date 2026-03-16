@@ -574,19 +574,22 @@ async function getPendingChallenges(userId) {
   });
 }
 
-async function acceptBattleChallenge(battleId, opponentTeamIndex) {
-  console.log(`­ƒÆ¥ Guardando en BD - Battle ID: ${battleId}, Opponent Team Index: ${opponentTeamIndex}`);
-  
+async function acceptBattleChallenge(battleId, opponentId, opponentTeamIndex) {
+  console.log(`Guardando en BD - Battle ID: ${battleId}, Opponent ID: ${opponentId}, Opponent Team Index: ${opponentTeamIndex}`);
+
   const result = await pool.query(
-    `UPDATE battle_challenges 
-     SET status = 'accepted', opponent_team_index = $1, accepted_at = NOW()
-     WHERE id = $2 RETURNING *`,
-    [opponentTeamIndex, battleId]
+    `UPDATE battle_challenges
+     SET status = 'accepted', opponent_team_index = $1, accepted_at = NOW(), updated_at = NOW()
+     WHERE id = $2 AND opponent_id = $3 AND status = 'pending'
+     RETURNING *`,
+    [opponentTeamIndex, battleId, opponentId]
   );
-  
-  const updated = result.rows[0];
-  console.log(`Ô£à Batalla actualizada - Status: ${updated.status}, Opponent Team Index: ${updated.opponent_team_index}`);
-  
+
+  const updated = result.rows[0] || null;
+  if (updated) {
+    console.log(`Batalla actualizada - Status: ${updated.status}, Opponent Team Index: ${updated.opponent_team_index}`);
+  }
+
   return updated;
 }
 

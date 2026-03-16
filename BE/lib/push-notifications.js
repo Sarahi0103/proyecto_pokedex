@@ -162,6 +162,31 @@ function createBattleAcceptedPayload(opponentName, battleId) {
 }
 
 /**
+ * Crear payload de resultado de batalla
+ */
+function createBattleResultPayload(battleId, winnerName, loserName, didWin) {
+  return {
+    title: didWin ? '🏆 Victoria en batalla' : '💥 Derrota en batalla',
+    body: didWin
+      ? `Has derrotado a ${loserName} en tu batalla.`
+      : `${winnerName} ganó la batalla.`,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-72.png',
+    tag: createNotificationTag('battle-result', battleId),
+    data: {
+      type: 'battle-result',
+      battleId,
+      winnerName,
+      loserName,
+      didWin,
+      timestamp: Date.now(),
+      url: `/battle?id=${battleId}`
+    },
+    urgency: 'high'
+  };
+}
+
+/**
  * Crear payload de notificación de amistad aceptada
  */
 function createFriendAcceptedPayload(friendName) {
@@ -186,6 +211,7 @@ module.exports = {
   createFriendRequestPayload,
   createBattleChallengePayload,
   createBattleAcceptedPayload,
+  createBattleResultPayload,
   createFriendAcceptedPayload,
   getVapidPublicKey: () => vapidPublicKey
 };

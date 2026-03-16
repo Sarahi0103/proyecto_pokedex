@@ -29,6 +29,10 @@ const pollingInterval = ref(null)
 const previousChallengesCount = ref(0)
 const notifications = ref([])
 const notificationSound = ref(null)
+const sendingChallenge = ref(false)
+const challengeActionState = ref({})
+const audioContextRef = ref(null)
+const audioUnlocked = ref(false)
 const showBattleAnimation = ref(false)
 const currentBattleLog = ref([])
 const currentTurn = ref(0)
@@ -51,6 +55,58 @@ const selectedMove = ref(null)
 const availableMoves = ref([])
 const isPlayerTurn = ref(false)
 const turnResult = ref(null)
+
+function setChallengeActionState(challengeId, action) {
+  challengeActionState.value = {
+    ...challengeActionState.value,
+    [challengeId]: action
+  }
+}
+
+function clearChallengeActionState(challengeId) {
+  const nextState = { ...challengeActionState.value }
+  delete nextState[challengeId]
+  challengeActionState.value = nextState
+}
+
+function getChallengeActionState(challengeId) {
+  return challengeActionState.value[challengeId] || null
+}
+
+function getAudioContextInstance() {
+  if (typeof window === 'undefined') return null
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return null
+
+  if (!audioContextRef.value) {
+    audioContextRef.value = new AudioContextClass()
+  }
+
+  return audioContextRef.value
+}
+
+async function unlockAudioContextFromGesture() {
+  try {
+    const audioContext = getAudioContextInstance()
+    if (!audioContext) return
+
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+    }
+
+    audioUnlocked.value = audioContext.state === 'running'
+  } catch (e) {
+    audioUnlocked.value = false
+  }
+}
+
+function getReadyAudioContext() {
+  const audioContext = audioContextRef.value
+  if (!audioUnlocked.value || !audioContext || audioContext.state !== 'running') {
+    return null
+  }
+  return audioContext
+}
 
 // Computed properties
 const getHPPercentage = (pokemon) => {
@@ -112,6 +168,10 @@ onMounted(async () => {
   // Inicializar Socket.io
   initializeSocket()
 
+  window.addEventListener('pointerdown', unlockAudioContextFromGesture)
+  window.addEventListener('keydown', unlockAudioContextFromGesture)
+  window.addEventListener('touchstart', unlockAudioContextFromGesture)
+
   if ('serviceWorker' in navigator) {
     serviceWorkerMessageHandler = async (event) => {
       const messageType = event.data?.type
@@ -133,7 +193,7 @@ onMounted(async () => {
         return
       }
 
-      const isBattlePush = notificationType === 'battle-challenge' || notificationType === 'battle-accepted'
+      const isBattlePush = notificationType === 'battle-challenge' || notificationType === 'battle-accepted' || notificationType === 'battle-result'
       if (!isBattlePush) {
         return
       }
@@ -143,6 +203,20 @@ onMounted(async () => {
 
       if (notificationType === 'battle-challenge') {
         playNotificationSound()
+      }
+
+      if (notificationType === 'battle-accepted') {
+        const pushBattleId = normalizeId(event.data?.battleId || event.data?.data?.battleId)
+        if (pushBattleId !== null) {
+          await openAcceptedBattle(pushBattleId)
+        }
+      }
+
+      if (notificationType === 'battle-result') {
+        const pushBattleId = normalizeId(event.data?.battleId || event.data?.data?.battleId)
+        if (pushBattleId !== null) {
+          await loadBattle(pushBattleId)
+        }
       }
     }
 
@@ -257,6 +331,11 @@ function initializeSocket() {
     
     // Recargar desafíos
     await loadChallenges()
+
+    const acceptedBattleId = normalizeId(data?.battleId)
+    if (acceptedBattleId !== null) {
+      await openAcceptedBattle(acceptedBattleId)
+    }
   })
   
   // Notificación de desafío rechazado
@@ -328,6 +407,14 @@ function initializeSocket() {
   
   socket.value.on('battle-end', (data) => {
     showNotification('🏆 Batalla finalizada', `${data.winnerName} ha ganado!`)
+  })
+
+  socket.value.on('battle-completed', async (data) => {
+    showNotification(
+      Number(currentUser()?.id) === Number(data?.winner_id) ? '🎉 ¡Victoria!' : '💥 Batalla finalizada',
+      `${data?.winner_name || 'Alguien'} ganó la batalla`
+    )
+    await loadChallenges()
   })
   
   socket.value.on('player-disconnected', () => {
@@ -599,8 +686,8 @@ function showNotification(title, body) {
 
 function playNotificationSound() {
   try {
-    // Crear un sonido de notificación usando Web Audio API
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const audioContext = getReadyAudioContext()
+    if (!audioContext) return
     const oscillator = audioContext.createOscillator()
     const gainNode = audioContext.createGain()
     
@@ -639,6 +726,10 @@ onUnmounted(() => {
   if (serviceWorkerMessageHandler && 'serviceWorker' in navigator) {
     navigator.serviceWorker.removeEventListener('message', serviceWorkerMessageHandler)
   }
+
+  window.removeEventListener('pointerdown', unlockAudioContextFromGesture)
+  window.removeEventListener('keydown', unlockAudioContextFromGesture)
+  window.removeEventListener('touchstart', unlockAudioContextFromGesture)
 })
 
 async function loadInitialData() {
@@ -731,6 +822,8 @@ async function loadChallenges() {
 }
 
 async function sendChallenge() {
+  if (sendingChallenge.value) return
+
   if (selectedTeam.value === null) {
     showNotification('⚠️ Equipo requerido', 'Por favor selecciona un equipo')
     return
@@ -746,6 +839,7 @@ async function sendChallenge() {
   console.log('  - Equipo seleccionado:', selectedTeam.value)
   
   try {
+    sendingChallenge.value = true
     const response = await api('/api/battles/challenge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -784,6 +878,8 @@ async function sendChallenge() {
   } catch (e) {
     console.error('❌ Error enviando desafío:', e)
     showNotification('❌ Error', e.message || 'No se pudo enviar el desafío')
+  } finally {
+    sendingChallenge.value = false
   }
 }
 
@@ -803,6 +899,8 @@ async function ensureTeamsLoadedForBattle() {
 }
 
 async function acceptChallenge(challenge) {
+  if (getChallengeActionState(challenge.id)) return
+
   const hasTeams = await ensureTeamsLoadedForBattle()
   if (!hasTeams) {
     showNotification('⚠️ Equipo requerido', 'Necesitas crear al menos un equipo antes de aceptar la batalla')
@@ -824,6 +922,8 @@ async function acceptChallenge(challenge) {
   console.log(`✅ Aceptando desafío ${challenge.id} con equipo index:`, teamIndex)
   
   try {
+    setChallengeActionState(challenge.id, 'accept')
+
     // Aceptar el desafío
     const response = await api(`/api/battles/${challenge.id}/accept`, {
       method: 'POST',
@@ -832,41 +932,49 @@ async function acceptChallenge(challenge) {
     })
     
     console.log('✅ Desafío aceptado:', response)
+
+    const acceptedBattle = response?.battle || {
+      ...challenge,
+      status: 'accepted',
+      opponent_team_index: Number(teamIndex)
+    }
+    const acceptedBattleId = normalizeId(acceptedBattle.id) ?? normalizeId(challenge.id)
     
     // Mantener la batalla visible localmente para evitar UI vacía si la recarga tarda
-    challenges.value = challenges.value.map(c => {
-      if (c.id === challenge.id) {
-        return {
-          ...c,
-          status: 'accepted',
-          opponent_team_index: Number(teamIndex)
-        }
-      }
-      return c
+    upsertChallenge({
+      ...acceptedBattle,
+      status: acceptedBattle.status || 'accepted',
+      opponent_team_index: acceptedBattle.opponent_team_index ?? Number(teamIndex)
     })
     
-    showNotification('✅ Desafío aceptado', 'La batalla aparecerá en "Batallas Listas". Haz clic en "Ejecutar Batalla" cuando estés listo.')
+    showNotification('✅ Desafío aceptado', 'Preparando la batalla y sincronizando resultado...')
     playNotificationSound()
     
     delete challengeTeamSelections.value[challenge.id]
+    autoStartedBattles.value.add(acceptedBattleId)
 
     if (route.query.id && normalizeId(route.query.id) === normalizeId(challenge.id)) {
       router.replace('/battle')
     }
     
-    // Recargar desafíos para mostrar la batalla en "Batallas Listas"
+    // Recargar desafíos y arrancar la batalla de inmediato
     await loadChallenges()
-    await loadBattle(challenge.id)
+    await loadBattle(acceptedBattleId)
+    await executeBattle(acceptedBattleId)
   } catch (e) {
     console.error('❌ Error aceptando desafío:', e)
     showNotification('❌ Error', e.message || 'No se pudo aceptar el desafío')
+  } finally {
+    clearChallengeActionState(challenge.id)
   }
 }
 
 async function rejectChallenge(challenge) {
+  if (getChallengeActionState(challenge.id)) return
   if (!confirm('¿Rechazar este desafío?')) return
   
   try {
+    setChallengeActionState(challenge.id, 'reject')
     await api(`/api/battles/${challenge.id}/reject`, {
       method: 'POST'
     })
@@ -885,13 +993,17 @@ async function rejectChallenge(challenge) {
   } catch (e) {
     console.error(e)
     showNotification('❌ Error', e.message || 'No se pudo rechazar el desafío')
+  } finally {
+    clearChallengeActionState(challenge.id)
   }
 }
 
 async function cancelChallenge(challenge) {
+  if (getChallengeActionState(challenge.id)) return
   if (!confirm('¿Cancelar este desafío enviado?')) return
   
   try {
+    setChallengeActionState(challenge.id, 'cancel')
     await api(`/api/battles/${challenge.id}/cancel`, {
       method: 'POST'
     })
@@ -903,7 +1015,17 @@ async function cancelChallenge(challenge) {
   } catch (e) {
     console.error(e)
     showNotification('❌ Error', e.message || 'No se pudo cancelar el desafío')
+  } finally {
+    clearChallengeActionState(challenge.id)
   }
+}
+
+async function openAcceptedBattle(battleId) {
+  const normalizedBattleId = normalizeId(battleId)
+  if (normalizedBattleId === null) return
+
+  await loadBattle(normalizedBattleId)
+  await executeBattle(normalizedBattleId)
 }
 
 async function loadBattle(battleId) {
@@ -1318,7 +1440,8 @@ function showBattleEndNotification(result) {
 
 function playAttackSound() {
   try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const audioContext = getReadyAudioContext()
+    if (!audioContext) return
     const oscillator = audioContext.createOscillator()
     const gainNode = audioContext.createGain()
     
@@ -1341,7 +1464,8 @@ function playAttackSound() {
 
 function playFaintSound() {
   try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const audioContext = getReadyAudioContext()
+    if (!audioContext) return
     const oscillator = audioContext.createOscillator()
     const gainNode = audioContext.createGain()
     
@@ -1364,7 +1488,8 @@ function playFaintSound() {
 
 function playVictorySound() {
   try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const audioContext = getReadyAudioContext()
+    if (!audioContext) return
     
     // Secuencia de notas de victoria
     const notes = [523.25, 659.25, 783.99, 1046.50] // Do, Mi, Sol, Do alto
@@ -1848,8 +1973,8 @@ function debugBattleSystem() {
         </div>
 
         <div v-if="selectedTeam !== null && selectedFriend" class="challenge-action">
-          <button class="btn btn-accent btn-lg" @click="sendChallenge">
-            ⚔️ Enviar Desafío a {{ selectedFriend.name }}
+          <button class="btn btn-accent btn-lg" @click="sendChallenge" :disabled="sendingChallenge">
+            {{ sendingChallenge ? '⏳ Enviando desafío...' : `⚔️ Enviar Desafío a ${selectedFriend.name}` }}
           </button>
         </div>
 
@@ -1902,11 +2027,11 @@ function debugBattleSystem() {
               </div>
             </div>
             <div class="challenge-actions">
-              <button class="btn btn-success" @click="acceptChallenge(challenge)" :disabled="myTeams.length === 0">
-                ✓ Aceptar
+              <button class="btn btn-success" @click="acceptChallenge(challenge)" :disabled="myTeams.length === 0 || !!getChallengeActionState(challenge.id)">
+                {{ getChallengeActionState(challenge.id) === 'accept' ? '⏳ Aceptando...' : '✓ Aceptar' }}
               </button>
-              <button class="btn btn-danger" @click="rejectChallenge(challenge)">
-                ✗ Rechazar
+              <button class="btn btn-danger" @click="rejectChallenge(challenge)" :disabled="!!getChallengeActionState(challenge.id)">
+                {{ getChallengeActionState(challenge.id) === 'reject' ? '⏳ Rechazando...' : '✗ Rechazar' }}
               </button>
             </div>
           </div>
@@ -1929,8 +2054,8 @@ function debugBattleSystem() {
               {{ new Date(challenge.created_at).toLocaleString() }}
             </div>
             <div class="challenge-actions">
-              <button class="btn btn-outline" @click="cancelChallenge(challenge)">
-                🗑️ Cancelar
+              <button class="btn btn-outline" @click="cancelChallenge(challenge)" :disabled="!!getChallengeActionState(challenge.id)">
+                {{ getChallengeActionState(challenge.id) === 'cancel' ? '⏳ Cancelando...' : '🗑️ Cancelar' }}
               </button>
             </div>
           </div>
@@ -1957,7 +2082,7 @@ function debugBattleSystem() {
               <div class="ready-check">✓ Esperando ejecución</div>
             </div>
             <div class="challenge-actions">
-              <button class="btn btn-accent" @click="loadBattle(battle.id)">
+              <button class="btn btn-accent" @click="openAcceptedBattle(battle.id)" :disabled="battling">
                 🎮 Ejecutar Batalla
               </button>
             </div>

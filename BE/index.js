@@ -58,6 +58,7 @@ const {
   createFriendRequestPayload,
   createBattleChallengePayload,
   createBattleAcceptedPayload,
+  createBattleResultPayload,
   createFriendAcceptedPayload,
   getVapidPublicKey
 } = require('./lib/push-notifications');
@@ -1192,13 +1193,25 @@ app.post('/api/battles/:battleId/accept', authMiddleware, async (req, res) => {
     console.log(`✅ Usuario aceptando desafío:`, user.name, '| ID:', user.id);
     
     const battle = await getBattleById(battleId);
+    if (!battle) {
+      return res.status(404).json({ error: 'Battle not found' });
+    }
+
     console.log(`🎮 Batalla a aceptar:`, battle.id, '| Retador:', battle.challenger_name, '| Oponente:', battle.opponent_name);
     
-    if (!battle || battle.opponent_id !== user.id) {
+    if (battle.opponent_id !== user.id) {
       return res.status(403).json({ error: 'No autorizado - solo el oponente puede aceptar' });
     }
 
     if (battle.status !== 'pending') {
+      if (['accepted', 'in_progress', 'completed'].includes(battle.status)) {
+        return res.json({
+          message: 'Challenge already processed',
+          battle,
+          action: 'already_processed'
+        });
+      }
+
       return res.status(400).json({ error: `Battle is not pending (current status: ${battle.status})` });
     }
 
@@ -1212,13 +1225,29 @@ app.post('/api/battles/:battleId/accept', authMiddleware, async (req, res) => {
     }
     
     console.log(`🎮 Aceptando con equipo index:`, teamIndexNumber);
-    await acceptBattleChallenge(battleId, teamIndexNumber);
+    const acceptedBattle = await acceptBattleChallenge(battleId, user.id, teamIndexNumber);
+
+    if (!acceptedBattle) {
+      const currentBattle = await getBattleById(battleId);
+      if (currentBattle && ['accepted', 'in_progress', 'completed'].includes(currentBattle.status)) {
+        return res.json({
+          message: 'Challenge already processed',
+          battle: currentBattle,
+          action: 'already_processed'
+        });
+      }
+
+      return res.status(409).json({ error: 'Battle could not be accepted because it was processed by another request' });
+    }
+
+    const updatedBattle = await getBattleById(battleId);
     
     // Notificar al retador que su desafío fue aceptado
     notifyUser(io, battle.challenger_id, 'challenge-accepted', {
       battleId: battle.id,
       opponentName: user.name,
       opponentEmail: user.email,
+      status: 'accepted',
       message: `${user.name} ha aceptado tu desafío!`
     });
     
@@ -1232,7 +1261,11 @@ app.post('/api/battles/:battleId/accept', authMiddleware, async (req, res) => {
         }
       });
     
-    res.json({ message: 'Challenge accepted! Battle starting...' });
+    res.json({
+      message: 'Challenge accepted! Battle starting...',
+      battle: updatedBattle,
+      action: 'accepted'
+    });
   } catch (e) {
     console.error('Accept challenge error:', e);
     res.status(500).json({ error: 'Database error' });
@@ -1376,6 +1409,52 @@ app.post('/api/battles/:battleId/execute', authMiddleware, async (req, res) => {
     
     // Ejecutar la batalla usando la función de db.js
     const result = await executeBattle(battleId);
+
+    const battleResultPayloadForWinner = createBattleResultPayload(
+      battleId,
+      result.battle_result.winner_name,
+      result.battle_result.loser_name,
+      true
+    );
+    const battleResultPayloadForLoser = createBattleResultPayload(
+      battleId,
+      result.battle_result.winner_name,
+      result.battle_result.loser_name,
+      false
+    );
+
+    notifyUser(io, battle.challenger_id, 'battle-completed', {
+      battleId: Number(battleId),
+      winner_id: result.battle_result.winner_id,
+      winner_name: result.battle_result.winner_name,
+      loser_name: result.battle_result.loser_name
+    });
+    notifyUser(io, battle.opponent_id, 'battle-completed', {
+      battleId: Number(battleId),
+      winner_id: result.battle_result.winner_id,
+      winner_name: result.battle_result.winner_name,
+      loser_name: result.battle_result.loser_name
+    });
+
+    sendPushToUser(
+      result.battle_result.winner_id,
+      battleResultPayloadForWinner,
+      'Battle result winner'
+    ).then(pushResult => {
+      if (pushResult.success) {
+        console.log('✅ Push notification de victoria enviada correctamente');
+      }
+    });
+
+    sendPushToUser(
+      result.battle_result.loser_id,
+      battleResultPayloadForLoser,
+      'Battle result loser'
+    ).then(pushResult => {
+      if (pushResult.success) {
+        console.log('✅ Push notification de derrota enviada correctamente');
+      }
+    });
     
     res.json({ 
       ...result,
