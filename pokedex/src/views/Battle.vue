@@ -787,7 +787,33 @@ async function sendChallenge() {
   }
 }
 
+async function ensureTeamsLoadedForBattle() {
+  if (Array.isArray(myTeams.value) && myTeams.value.length > 0) {
+    return true
+  }
+
+  try {
+    const teamsData = await api('/api/teams')
+    myTeams.value = teamsData.teams || []
+  } catch (e) {
+    console.error('Error recargando equipos para batalla:', e)
+  }
+
+  return Array.isArray(myTeams.value) && myTeams.value.length > 0
+}
+
 async function acceptChallenge(challenge) {
+  const hasTeams = await ensureTeamsLoadedForBattle()
+  if (!hasTeams) {
+    showNotification('⚠️ Equipo requerido', 'Necesitas crear al menos un equipo antes de aceptar la batalla')
+    router.push('/teams')
+    return
+  }
+
+  if ((challengeTeamSelections.value[challenge.id] === null || challengeTeamSelections.value[challenge.id] === undefined || challengeTeamSelections.value[challenge.id] === '') && myTeams.value.length === 1) {
+    challengeTeamSelections.value[challenge.id] = 0
+  }
+
   const teamIndex = challengeTeamSelections.value[challenge.id]
 
   if (teamIndex === null || teamIndex === undefined || teamIndex === '') {
@@ -1865,15 +1891,18 @@ function debugBattleSystem() {
             </div>
             <div class="challenge-team-picker">
               <label class="challenge-team-label">Elige tu equipo para esta batalla</label>
-              <select v-model="challengeTeamSelections[challenge.id]" class="challenge-team-select">
+              <select v-model="challengeTeamSelections[challenge.id]" class="challenge-team-select" :disabled="myTeams.length === 0">
                 <option :value="undefined">-- Selecciona tu equipo --</option>
                 <option v-for="(team, index) in myTeams" :key="`${challenge.id}-${index}`" :value="index">
                   {{ team.name || `Equipo ${index + 1}` }} ({{ (team.pokemons || []).length }} Pokémon)
                 </option>
               </select>
+              <div v-if="myTeams.length === 0" class="challenge-team-help">
+                No tienes equipos disponibles para aceptar. Crea uno en Equipos.
+              </div>
             </div>
             <div class="challenge-actions">
-              <button class="btn btn-success" @click="acceptChallenge(challenge)">
+              <button class="btn btn-success" @click="acceptChallenge(challenge)" :disabled="myTeams.length === 0">
                 ✓ Aceptar
               </button>
               <button class="btn btn-danger" @click="rejectChallenge(challenge)">
@@ -3030,6 +3059,13 @@ function debugBattleSystem() {
   border-radius: 10px;
   font-size: 14px;
   background: #fff;
+}
+
+.challenge-team-help {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #b45309;
+  font-weight: 600;
 }
 .challenges-section{
   background: white;
