@@ -1736,6 +1736,10 @@ function debugBattleSystem() {
             >
               <span class="move-name">{{ move.name }}</span>
               <span class="move-type">{{ move.type || 'Normal' }}</span>
+              <span class="move-meta">
+                <span>PWR {{ move.power ?? '-' }}</span>
+                <span>ACC {{ move.accuracy ?? '-' }}</span>
+              </span>
             </button>
           </div>
           <button
@@ -3976,8 +3980,9 @@ function debugBattleSystem() {
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.3s;
+  text-align: left;
 }
 
 .move-btn:hover {
@@ -4002,6 +4007,14 @@ function debugBattleSystem() {
   font-size: 12px;
   opacity: 0.8;
   text-transform: uppercase;
+}
+
+.move-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.9;
 }
 
 .submit-move-btn {

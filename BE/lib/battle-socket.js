@@ -35,8 +35,21 @@ const TYPE_EFFECTIVENESS = {
 // Obtener datos de Pokémon de la PokéAPI con cache
 async function getMoveData(moveRef) {
   if (!moveRef) return null;
-  const moveName = typeof moveRef === 'string' ? moveRef : moveRef.name;
-  const moveUrl = typeof moveRef === 'object' ? moveRef.url : null;
+  if (typeof moveRef === 'object' && moveRef.name && moveRef.type && moveRef.power !== undefined) {
+    return {
+      name: moveRef.name,
+      type: moveRef.type,
+      power: moveRef.power,
+      accuracy: moveRef.accuracy ?? null,
+      damageClass: moveRef.damageClass || moveRef.damage_class || 'physical',
+      url: moveRef.url || null
+    };
+  }
+
+  const nestedMove = typeof moveRef === 'object' ? moveRef.move : null;
+  const moveCandidate = nestedMove && typeof nestedMove === 'object' ? nestedMove : moveRef;
+  const moveName = typeof moveCandidate === 'string' ? moveCandidate : moveCandidate?.name;
+  const moveUrl = typeof moveCandidate === 'object' ? moveCandidate.url : null;
 
   if (!moveName && !moveUrl) return null;
 
@@ -79,7 +92,7 @@ async function buildPokemonMoveset(pokemonApiMoves) {
   }
 
   const candidateRefs = sourceMoves
-    .slice(0, 20)
+    .slice(0, 30)
     .map((entry) => entry?.move)
     .filter(Boolean);
 
@@ -96,7 +109,6 @@ async function buildPokemonMoveset(pokemonApiMoves) {
     if (seen.has(move.name)) continue;
     seen.add(move.name);
     uniqueByName.push(move);
-    if (uniqueByName.length >= 4) break;
   }
 
   if (uniqueByName.length === 0) {
@@ -112,7 +124,7 @@ async function enrichTeamPokemonForBattle(teamPokemon) {
 
   let moves = pokemonFromApi.moves;
   if (Array.isArray(teamPokemon?.moves) && teamPokemon.moves.length > 0) {
-    const customMoves = await Promise.all(teamPokemon.moves.slice(0, 4).map((moveRef) => getMoveData(moveRef)));
+    const customMoves = await Promise.all(teamPokemon.moves.map((moveRef) => getMoveData(moveRef)));
     const validCustomMoves = customMoves.filter(Boolean);
     if (validCustomMoves.length > 0) {
       moves = validCustomMoves;
