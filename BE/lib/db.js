@@ -891,7 +891,7 @@ function determineWinnerFromState(battle, team1, team2, damageByTeam1, damageByT
   return { winnerId: battle.challenger_id, winnerName: battle.challenger_name, loserId: battle.opponent_id, loserName: battle.opponent_name, reason: 'sudden_death_tiebreaker' };
 }
 
-async function executeBattle(battleId) {
+async function executeBattle(battleId, executorUserId = null) {
   const battle = await getBattleById(battleId);
   if (!battle) {
     throw new Error('Batalla no encontrada');
@@ -925,6 +925,14 @@ async function executeBattle(battleId) {
   const team1Pokemon = team1Raw.map((pokemon) => normalizePokemonForBattle(pokemon, battle.challenger_name));
   const team2Pokemon = team2Raw.map((pokemon) => normalizePokemonForBattle(pokemon, battle.opponent_name));
 
+  const parsedExecutorUserId = Number(executorUserId);
+  const hasExecutor = Number.isInteger(parsedExecutorUserId) && parsedExecutorUserId > 0;
+  const executorIsTeam1 = hasExecutor ? parsedExecutorUserId === battle.challenger_id : true;
+
+  if (hasExecutor && parsedExecutorUserId !== battle.challenger_id && parsedExecutorUserId !== battle.opponent_id) {
+    throw new Error('El usuario que ejecuta la batalla no pertenece a esta batalla');
+  }
+
   const battleLog = [
     {
       type: 'start',
@@ -933,6 +941,7 @@ async function executeBattle(battleId) {
         challenger: team1Pokemon.map((p) => p.name),
         opponent: team2Pokemon.map((p) => p.name)
       },
+      first_turn: executorIsTeam1 ? battle.challenger_name : battle.opponent_name,
       timestamp: Date.now()
     }
   ];
@@ -944,6 +953,7 @@ async function executeBattle(battleId) {
   const MAX_TURNS = 220;
   let team1TotalDamage = 0;
   let team2TotalDamage = 0;
+  let isTeam1Turn = executorIsTeam1;
 
   const performAttack = (attacker, defender, isTeam1Attacker) => {
     const { damage, details } = calculateDamage(attacker, defender);
@@ -1007,49 +1017,13 @@ async function executeBattle(battleId) {
     const active1 = team1Pokemon[team1Index];
     const active2 = team2Pokemon[team2Index];
 
-    const team1First = active1.speed === active2.speed
-      ? Math.random() >= 0.5
-      : active1.speed > active2.speed;
-
-    const first = team1First
+    const currentAttack = isTeam1Turn
       ? { attacker: active1, defender: active2, isTeam1: true }
       : { attacker: active2, defender: active1, isTeam1: false };
 
-    const second = team1First
-      ? { attacker: active2, defender: active1, isTeam1: false }
-      : { attacker: active1, defender: active2, isTeam1: true };
-
-    const firstFainted = performAttack(first.attacker, first.defender, first.isTeam1);
-    if (firstFainted) {
-      if (first.isTeam1) {
-        team2Index += 1;
-        if (team2Index < team2Pokemon.length) {
-          battleLog.push({
-            type: 'switch',
-            turn: turnNumber,
-            message: `${battle.opponent_name} envia a ${team2Pokemon[team2Index].name}`,
-            pokemon: team2Pokemon[team2Index].name,
-            timestamp: Date.now()
-          });
-        }
-      } else {
-        team1Index += 1;
-        if (team1Index < team1Pokemon.length) {
-          battleLog.push({
-            type: 'switch',
-            turn: turnNumber,
-            message: `${battle.challenger_name} envia a ${team1Pokemon[team1Index].name}`,
-            pokemon: team1Pokemon[team1Index].name,
-            timestamp: Date.now()
-          });
-        }
-      }
-      continue;
-    }
-
-    const secondFainted = performAttack(second.attacker, second.defender, second.isTeam1);
-    if (secondFainted) {
-      if (second.isTeam1) {
+    const fainted = performAttack(currentAttack.attacker, currentAttack.defender, currentAttack.isTeam1);
+    if (fainted) {
+      if (currentAttack.isTeam1) {
         team2Index += 1;
         if (team2Index < team2Pokemon.length) {
           battleLog.push({
@@ -1073,6 +1047,8 @@ async function executeBattle(battleId) {
         }
       }
     }
+
+    isTeam1Turn = !isTeam1Turn;
   }
 
   const winner = determineWinnerFromState(battle, team1Pokemon, team2Pokemon, team1TotalDamage, team2TotalDamage);

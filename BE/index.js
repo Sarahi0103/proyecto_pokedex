@@ -1408,7 +1408,7 @@ app.post('/api/battles/:battleId/execute', authMiddleware, async (req, res) => {
     }
     
     // Ejecutar la batalla usando la función de db.js
-    const result = await executeBattle(battleId);
+    const result = await executeBattle(battleId, user.id);
 
     const battleResultPayloadForWinner = createBattleResultPayload(
       battleId,
