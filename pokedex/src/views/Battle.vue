@@ -421,6 +421,10 @@ function initializeSocket() {
     // Actualizar Pokémon activos
     currentActivePokemon1.value = data.currentPokemon1
     currentActivePokemon2.value = data.currentPokemon2
+
+    // Refrescar movimientos según el Pokémon activo del jugador
+    const activePlayerPokemon = realtimeBattle.value?.isPlayer1 ? data.currentPokemon1 : data.currentPokemon2
+    availableMoves.value = activePlayerPokemon?.moves || []
     
     // Animar resultados
     if (data.results && data.results.length > 0) {

@@ -9,6 +9,7 @@ const connectedUsers = new Map();
 
 // Cache de datos de Pokémon de la PokéAPI
 const pokemonCache = new Map();
+const moveCache = new Map();
 
 const TYPE_EFFECTIVENESS = {
   normal: { rock: 0.5, ghost: 0, steel: 0.5 },
@@ -32,6 +33,98 @@ const TYPE_EFFECTIVENESS = {
 };
 
 // Obtener datos de Pokémon de la PokéAPI con cache
+async function getMoveData(moveRef) {
+  if (!moveRef) return null;
+  const moveName = typeof moveRef === 'string' ? moveRef : moveRef.name;
+  const moveUrl = typeof moveRef === 'object' ? moveRef.url : null;
+
+  if (!moveName && !moveUrl) return null;
+
+  const key = (moveName || moveUrl).toLowerCase();
+  if (moveCache.has(key)) {
+    return moveCache.get(key);
+  }
+
+  try {
+    const response = await axios.get(moveUrl || `https://pokeapi.co/api/v2/move/${moveName}`);
+    const moveData = response.data;
+    const normalized = {
+      name: moveData.name,
+      type: moveData.type?.name || 'normal',
+      power: moveData.power || 50,
+      accuracy: moveData.accuracy,
+      damageClass: moveData.damage_class?.name || 'physical',
+      url: moveData.url || moveUrl || null
+    };
+    moveCache.set(key, normalized);
+    return normalized;
+  } catch (error) {
+    const fallback = {
+      name: moveName || 'tackle',
+      type: 'normal',
+      power: 50,
+      accuracy: null,
+      damageClass: 'physical',
+      url: moveUrl || null
+    };
+    moveCache.set(key, fallback);
+    return fallback;
+  }
+}
+
+async function buildPokemonMoveset(pokemonApiMoves) {
+  const sourceMoves = Array.isArray(pokemonApiMoves) ? pokemonApiMoves : [];
+  if (sourceMoves.length === 0) {
+    return [{ name: 'tackle', type: 'normal', power: 50, damageClass: 'physical' }];
+  }
+
+  const candidateRefs = sourceMoves
+    .slice(0, 20)
+    .map((entry) => entry?.move)
+    .filter(Boolean);
+
+  const analyzed = await Promise.all(candidateRefs.map((moveRef) => getMoveData(moveRef)));
+  const attackMoves = analyzed.filter((move) => move && move.power > 0);
+
+  const preferred = (attackMoves.length > 0 ? attackMoves : analyzed.filter(Boolean))
+    .sort((a, b) => (b.power || 0) - (a.power || 0));
+
+  const uniqueByName = [];
+  const seen = new Set();
+  for (const move of preferred) {
+    if (!move || !move.name) continue;
+    if (seen.has(move.name)) continue;
+    seen.add(move.name);
+    uniqueByName.push(move);
+    if (uniqueByName.length >= 4) break;
+  }
+
+  if (uniqueByName.length === 0) {
+    return [{ name: 'tackle', type: 'normal', power: 50, damageClass: 'physical' }];
+  }
+
+  return uniqueByName;
+}
+
+async function enrichTeamPokemonForBattle(teamPokemon) {
+  const pokemonFromApi = await getPokemonData(teamPokemon?.id || teamPokemon?.name);
+  if (!pokemonFromApi) return null;
+
+  let moves = pokemonFromApi.moves;
+  if (Array.isArray(teamPokemon?.moves) && teamPokemon.moves.length > 0) {
+    const customMoves = await Promise.all(teamPokemon.moves.slice(0, 4).map((moveRef) => getMoveData(moveRef)));
+    const validCustomMoves = customMoves.filter(Boolean);
+    if (validCustomMoves.length > 0) {
+      moves = validCustomMoves;
+    }
+  }
+
+  return {
+    ...pokemonFromApi,
+    moves
+  };
+}
+
 async function getPokemonData(pokemonId) {
   if (pokemonCache.has(pokemonId)) {
     return pokemonCache.get(pokemonId);
@@ -40,6 +133,7 @@ async function getPokemonData(pokemonId) {
   try {
     const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${pokemonId}`);
     const data = response.data;
+    const moveset = await buildPokemonMoveset(data.moves);
     
     const pokemonData = {
       id: data.id,
@@ -53,10 +147,7 @@ async function getPokemonData(pokemonId) {
         spDefense: data.stats.find(s => s.stat.name === 'special-defense')?.base_stat || 50,
         speed: data.stats.find(s => s.stat.name === 'speed')?.base_stat || 50
       },
-      moves: data.moves.slice(0, 4).map(m => ({
-        name: m.move.name,
-        url: m.move.url
-      })),
+      moves: moveset,
       types: data.types.map(t => t.type.name)
     };
     
@@ -142,10 +233,15 @@ function processTurn(battleState) {
     return [];
   }
 
+  const currentAttacker = isPlayer1Turn ? p1 : p2;
+  const attackerMoves = Array.isArray(currentAttacker?.moves) ? currentAttacker.moves : [];
+  const selectedMoveName = action.move?.name;
+  const selectedMove = attackerMoves.find((move) => move.name === selectedMoveName) || attackerMoves[0] || action.move;
+
   const attacks = [{
-    attacker: isPlayer1Turn ? p1 : p2,
+    attacker: currentAttacker,
     defender: isPlayer1Turn ? p2 : p1,
-    move: action.move,
+    move: selectedMove,
     isPlayer1: isPlayer1Turn
   }];
   
@@ -272,13 +368,21 @@ function setupBattleSocket(io) {
           const team1Pokemon = team1Data[battle.challenger_team_index].pokemons;
           const team2Pokemon = team2Data[battle.opponent_team_index].pokemons;
           
-          // Obtener datos completos de la PokéAPI
-          const team1Full = await Promise.all(
-            team1Pokemon.map(p => getPokemonData(p.id || p.name))
+          // Obtener datos completos de la PokéAPI y preservar movimientos personalizados por Pokémon
+          const team1FullRaw = await Promise.all(
+            team1Pokemon.map((p) => enrichTeamPokemonForBattle(p))
           );
-          const team2Full = await Promise.all(
-            team2Pokemon.map(p => getPokemonData(p.id || p.name))
+          const team2FullRaw = await Promise.all(
+            team2Pokemon.map((p) => enrichTeamPokemonForBattle(p))
           );
+
+          const team1Full = team1FullRaw.filter(Boolean);
+          const team2Full = team2FullRaw.filter(Boolean);
+
+          if (team1Full.length === 0 || team2Full.length === 0) {
+            socket.emit('error', { message: 'No se pudieron preparar los Pokémon para la batalla' });
+            return;
+          }
           
           battleState = initializeBattle(battleId, team1Full, team2Full);
           
