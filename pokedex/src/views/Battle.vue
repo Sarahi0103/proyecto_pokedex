@@ -37,6 +37,7 @@ const currentActivePokemon2 = ref(null)
 const previousAcceptedBattles = ref([])
 const seenCompletedBattles = ref(new Set())
 const seenActiveBattles = ref(new Set())
+const autoStartedBattles = ref(new Set())
 const activeBattlePolling = ref(false)
 const battleAnimationInterval = ref(null)
 let serviceWorkerMessageHandler = null
@@ -106,6 +107,7 @@ onMounted(async () => {
   battleResult.value = null
   seenActiveBattles.value.clear()
   seenCompletedBattles.value.clear()
+  autoStartedBattles.value.clear()
   
   // Inicializar Socket.io
   initializeSocket()
@@ -422,7 +424,7 @@ function getCurrentUserInfo() {
     if (!token) return { id: null, email: null }
     const payload = JSON.parse(atob(token.split('.')[1]))
     return {
-      id: payload.id || payload.userId || null,
+      id: payload.id || payload.userId || payload.user_id || payload.sub || null,
       email: payload.email || null
     }
   } catch (e) {
@@ -439,20 +441,30 @@ function normalizeId(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function normalizeEmail(value) {
+  if (!value || typeof value !== 'string') return null
+  const email = value.trim().toLowerCase()
+  return email || null
+}
+
 function isCurrentUserOpponent(challenge, userInfo) {
   const userId = normalizeId(userInfo.id)
   if (userId !== null) {
-    return normalizeId(challenge.opponent_user_id) === userId
+    const opponentUserId = normalizeId(challenge.opponent_user_id)
+    const opponentId = normalizeId(challenge.opponent_id)
+    return opponentUserId === userId || opponentId === userId
   }
-  return challenge.opponent_email === userInfo.email
+  return normalizeEmail(challenge.opponent_email) === normalizeEmail(userInfo.email)
 }
 
 function isCurrentUserChallenger(challenge, userInfo) {
   const userId = normalizeId(userInfo.id)
   if (userId !== null) {
-    return normalizeId(challenge.challenger_user_id) === userId
+    const challengerUserId = normalizeId(challenge.challenger_user_id)
+    const challengerId = normalizeId(challenge.challenger_id)
+    return challengerUserId === userId || challengerId === userId
   }
-  return challenge.challenger_email === userInfo.email
+  return normalizeEmail(challenge.challenger_email) === normalizeEmail(userInfo.email)
 }
 
 function isCurrentUserParticipant(challenge, userInfo) {
@@ -823,18 +835,26 @@ function startActiveBattlePolling() {
 
 // Detectar batallas activas y mostrar overlay mientras se espera el resultado
 async function detectActiveBattles() {
-  const userEmail = getUserEmailFromToken()
+  const userInfo = getCurrentUserInfo()
   const activeBattles = challenges.value.filter(c => 
     c.status === 'accepted' &&
-    (c.challenger_email === userEmail || c.opponent_email === userEmail)
+    isCurrentUserParticipant(c, userInfo)
   )
   
-  // Solo notificar de batallas aceptadas nuevas, NO ejecutar nada
+  // Notificar y abrir automáticamente la primera batalla aceptada nueva
   for (const battle of activeBattles) {
     if (!seenActiveBattles.value.has(battle.id)) {
       seenActiveBattles.value.add(battle.id)
-      showNotification('⚔️ Batalla Lista', `Tu batalla contra ${battle.challenger_email === userEmail ? battle.opponent_name : battle.challenger_name} está lista para ejecutarse.`)
+      const opponentName = isCurrentUserChallenger(battle, userInfo) ? battle.opponent_name : battle.challenger_name
+      showNotification('⚔️ Batalla Lista', `Tu batalla contra ${opponentName} está lista. Iniciando interfaz...`)
       playNotificationSound()
+
+      if (!autoStartedBattles.value.has(battle.id) && !battling.value) {
+        autoStartedBattles.value.add(battle.id)
+        await loadBattle(battle.id)
+        await executeBattle(battle.id)
+      }
+
       break
     }
   }
@@ -1279,6 +1299,13 @@ const acceptedBattles = computed(() => {
   })
 })
 
+const battleCounters = computed(() => ({
+  received: myPendingChallenges.value.length,
+  sent: mySentChallenges.value.length,
+  ready: acceptedBattles.value.length,
+  total: challenges.value.length
+}))
+
 watch(
   () => [route.query.id, route.query.action],
   async ([battleId, action]) => {
@@ -1704,12 +1731,30 @@ function debugBattleSystem() {
             ⚔️ Enviar Desafío a {{ selectedFriend.name }}
           </button>
         </div>
+
+        <div class="battle-counters">
+          <div class="counter-card">
+            <div class="counter-label">Desafíos Recibidos</div>
+            <div class="counter-value">{{ battleCounters.received }}</div>
+          </div>
+          <div class="counter-card">
+            <div class="counter-label">Desafíos Enviados</div>
+            <div class="counter-value">{{ battleCounters.sent }}</div>
+          </div>
+          <div class="counter-card">
+            <div class="counter-label">Batallas Listas</div>
+            <div class="counter-value">{{ battleCounters.ready }}</div>
+          </div>
+        </div>
       </div>
 
       <!-- Desafíos Recibidos -->
-      <div v-if="myPendingChallenges.length > 0" class="challenges-section">
+        <div class="challenges-section">
         <h3>📨 Desafíos Recibidos ({{ myPendingChallenges.length }})</h3>
-        <div class="challenges-grid">
+          <div v-if="myPendingChallenges.length === 0" class="empty-inline-state">
+            No tienes desafíos recibidos pendientes por ahora.
+          </div>
+          <div v-else class="challenges-grid">
           <div
             v-for="challenge in myPendingChallenges"
             :key="challenge.id"
@@ -1745,9 +1790,12 @@ function debugBattleSystem() {
       </div>
 
       <!-- Desafíos Enviados -->
-      <div v-if="mySentChallenges.length > 0" class="challenges-section">
+      <div class="challenges-section">
         <h3>📤 Desafíos Enviados ({{ mySentChallenges.length }})</h3>
-        <div class="challenges-grid">
+        <div v-if="mySentChallenges.length === 0" class="empty-inline-state">
+          No has enviado desafíos pendientes.
+        </div>
+        <div v-else class="challenges-grid">
           <div v-for="challenge in mySentChallenges" :key="challenge.id" class="challenge-card">
             <div class="challenge-header">
               <span class="challenge-from">Para: <strong>{{ challenge.opponent_name }}</strong></span>
@@ -1766,10 +1814,13 @@ function debugBattleSystem() {
       </div>
 
       <!-- Batallas Aceptadas -->
-      <div v-if="acceptedBattles.length > 0" class="challenges-section">
+      <div class="challenges-section">
         <h3>⚔️ Batallas Listas ({{ acceptedBattles.length }})</h3>
-        <p class="section-description">Ambos jugadores han seleccionado sus equipos. ¡Haz clic para ejecutar la batalla!</p>
-        <div class="challenges-grid">
+        <p class="section-description">Ambos jugadores han seleccionado sus equipos. Se iniciará automáticamente cuando aparezca y también puedes iniciarla manualmente.</p>
+        <div v-if="acceptedBattles.length === 0" class="empty-inline-state">
+          Aún no hay batallas aceptadas.
+        </div>
+        <div v-else class="challenges-grid">
           <div v-for="battle in acceptedBattles" :key="battle.id" class="challenge-card ready">
             <div class="challenge-header">
               <span class="challenge-from">
@@ -2641,6 +2692,46 @@ function debugBattleSystem() {
   font-weight: 600;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
   margin: 0;
+}
+
+.battle-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.counter-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.counter-label {
+  font-size: 12px;
+  color: #4b5563;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.counter-value {
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 900;
+  color: #1f2937;
+  margin-top: 4px;
+}
+
+.empty-inline-state {
+  background: #f9fafb;
+  color: #6b7280;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
 }
 
 .pokemon-loading{
