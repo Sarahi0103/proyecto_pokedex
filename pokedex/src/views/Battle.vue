@@ -374,6 +374,9 @@ function initializeSocket() {
     // console.log('📡 Estado de batalla recibido:', state)
     realtimeBattle.value = state
     isInRealtimeBattle.value = true
+    isPlayerTurn.value = !!state.isPlayerTurn
+    waitingForOpponent.value = !state.isPlayerTurn
+    turnResult.value = null
     
     // Cargar movimientos del Pokémon actual
     if (state.isPlayer1) {
@@ -390,17 +393,29 @@ function initializeSocket() {
   })
   
   socket.value.on('action-received', (data) => {
-    waitingForOpponent.value = data.player !== (realtimeBattle.value?.isPlayer1 ? 1 : 2)
-    if (data.player === (realtimeBattle.value?.isPlayer1 ? 1 : 2)) {
-      showNotification('✅ Movimiento enviado', 'Esperando al oponente...')
-    } else {
-      showNotification('⚔️ Oponente listo', 'El oponente ha elegido su movimiento')
+    const myPlayer = realtimeBattle.value?.isPlayer1 ? 1 : 2
+    if (data.player === myPlayer) {
+      waitingForOpponent.value = true
+      showNotification('✅ Movimiento enviado', 'Resolviendo turno...')
+      return
     }
+    showNotification('⚔️ Turno rival', 'El oponente está atacando')
   })
   
   socket.value.on('turn-result', (data) => {
     // console.log('📊 Resultado del turno:', data)
     turnResult.value = data
+
+    if (realtimeBattle.value) {
+      realtimeBattle.value = {
+        ...realtimeBattle.value,
+        currentPokemon1: data.currentPokemon1,
+        currentPokemon2: data.currentPokemon2,
+        currentTurnPlayer: data.currentTurnPlayer,
+        turn: data.turn,
+        log: data.battleLog || realtimeBattle.value.log || []
+      }
+    }
     
     // Actualizar Pokémon activos
     currentActivePokemon1.value = data.currentPokemon1
@@ -415,7 +430,13 @@ function initializeSocket() {
     if (data.ended) {
       setTimeout(() => {
         showBattleEndNotification({
-          winner: data.winnerName
+          battle_result: {
+            winner_name: data.winnerName,
+            turns: data.turn
+          },
+          winner_id: data.winner === 'player1'
+            ? realtimeBattle.value?.player1Id
+            : realtimeBattle.value?.player2Id
         })
         isInRealtimeBattle.value = false
         leaveRealtimeBattle()
@@ -423,8 +444,14 @@ function initializeSocket() {
     } else {
       // Resetear para el siguiente turno
       selectedMove.value = null
-      waitingForOpponent.value = false
-      isPlayerTurn.value = true
+      const myPlayer = realtimeBattle.value?.isPlayer1 ? 1 : 2
+      const myTurnNow = data.currentTurnPlayer === myPlayer
+      isPlayerTurn.value = myTurnNow
+      waitingForOpponent.value = !myTurnNow
+
+      if (myTurnNow) {
+        showNotification('🎯 Tu turno', 'Selecciona un movimiento para atacar')
+      }
     }
   })
   
@@ -463,7 +490,8 @@ function joinRealtimeBattle(battleId) {
   socket.value.emit('join-battle', { battleId, userId })
   isInRealtimeBattle.value = true
   showBattleAnimation.value = true
-  isPlayerTurn.value = true
+  waitingForOpponent.value = true
+  isPlayerTurn.value = false
 }
 
 function selectMove(move) {
@@ -492,13 +520,16 @@ function submitMove() {
 }
 
 function leaveRealtimeBattle() {
-  if (socket.value) {
-    socket.value.disconnect()
-    socket.value = null
+  if (socket.value && realtimeBattle.value?.battleId) {
+    socket.value.emit('leave-battle', { battleId: realtimeBattle.value.battleId })
   }
   isInRealtimeBattle.value = false
   showBattleAnimation.value = false
   realtimeBattle.value = null
+  waitingForOpponent.value = false
+  isPlayerTurn.value = false
+  selectedMove.value = null
+  availableMoves.value = []
 }
 
 function animateTurnResults(results) {
@@ -980,10 +1011,10 @@ async function acceptChallenge(challenge) {
       router.replace('/battle')
     }
     
-    // Recargar desafíos y arrancar la batalla de inmediato
+    // Recargar desafíos y entrar a batalla en línea de inmediato
     await loadChallenges()
     await loadBattle(acceptedBattleId)
-    await executeBattle(acceptedBattleId)
+    joinRealtimeBattle(acceptedBattleId)
   } catch (e) {
     console.error('❌ Error aceptando desafío:', e)
     showNotification('❌ Error', e.message || 'No se pudo aceptar el desafío')
@@ -1048,7 +1079,7 @@ async function openAcceptedBattle(battleId) {
   if (normalizedBattleId === null) return
 
   await loadBattle(normalizedBattleId)
-  await executeBattle(normalizedBattleId)
+  joinRealtimeBattle(normalizedBattleId)
 }
 
 async function loadBattle(battleId) {
@@ -1118,7 +1149,7 @@ async function detectActiveBattles() {
       if (!autoStartedBattles.value.has(battle.id) && !battling.value) {
         autoStartedBattles.value.add(battle.id)
         await loadBattle(battle.id)
-        await executeBattle(battle.id)
+        joinRealtimeBattle(battle.id)
       }
 
       break
@@ -1628,9 +1659,17 @@ function debugBattleSystem() {
           <div class="connection-status" :class="{ connected: socketConnected }">
             {{ socketConnected ? '🟢 Conectado' : '🔴 Desconectado' }}
           </div>
+          <div class="turn-indicator" :class="{ mine: isPlayerTurn }">
+            {{ isPlayerTurn ? '🎯 Tu turno' : '⏳ Turno del rival' }}
+          </div>
           <button @click="leaveRealtimeBattle" class="leave-battle-btn">
             ✕ Abandonar Batalla
           </button>
+        </div>
+
+        <div class="realtime-battle-meta">
+          <div class="meta-chip">Turno {{ realtimeBattle.turn ?? 0 }}</div>
+          <div class="meta-chip">Combate en línea activo</div>
         </div>
         
         <!-- Arena de Batalla -->
@@ -1668,7 +1707,7 @@ function debugBattleSystem() {
         <!-- Esperando al oponente -->
         <div v-if="waitingForOpponent" class="waiting-panel">
           <div class="waiting-spinner">⏳</div>
-          <p>Esperando al oponente...</p>
+          <p>{{ isPlayerTurn ? 'Resolviendo ataque...' : 'Esperando a que el rival elija su movimiento...' }}</p>
         </div>
         
         <!-- Log de turnos -->
@@ -1878,12 +1917,12 @@ function debugBattleSystem() {
         
         <div class="battle-actions">
           <button 
-            v-if="activeBattle.battle.status === 'accepted'"
+            v-if="activeBattle.battle.status === 'accepted' || activeBattle.battle.status === 'in_progress'"
             class="btn btn-accent btn-lg" 
-            @click="executeBattle(activeBattle.battle.id)"
-            :disabled="battling"
+            @click="joinRealtimeBattle(activeBattle.battle.id)"
+            :disabled="!socketConnected"
           >
-            {{ battling ? '⚡ Ejecutando Batalla...' : '🎮 Ejecutar Batalla' }}
+            {{ socketConnected ? '🎮 Entrar a Batalla en Línea' : '🔌 Conectando al servidor...' }}
           </button>
           <button class="btn btn-outline" @click="activeBattle = null">
             ← Volver
@@ -3712,8 +3751,10 @@ function debugBattleSystem() {
   padding: 20px;
   border-radius: 12px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   box-shadow: 0 4px 20px rgba(59, 76, 202, 0.4);
 }
 
@@ -3736,6 +3777,37 @@ function debugBattleSystem() {
 .connection-status.connected {
   background: rgba(76, 175, 80, 0.2);
   color: #4caf50;
+}
+
+.turn-indicator {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(255, 203, 5, 0.2);
+  color: #ffcb05;
+  font-weight: 800;
+  border: 1px solid rgba(255, 203, 5, 0.45);
+}
+
+.turn-indicator.mine {
+  background: rgba(76, 175, 80, 0.25);
+  color: #b8ffbf;
+  border-color: rgba(184, 255, 191, 0.55);
+}
+
+.realtime-battle-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .leave-battle-btn {

@@ -102,6 +102,7 @@ function initializeBattle(battleId, team1Data, team2Data) {
     battleId,
     status: 'waiting', // waiting, selecting, calculating, animating
     turn: 0,
+    currentTurnPlayer: 1,
     team1: team1Data.map(p => ({
       ...p,
       currentHP: p.stats.hp,
@@ -134,34 +135,19 @@ function processTurn(battleState) {
     return null;
   }
   
-  const action1 = battleState.player1Action;
-  const action2 = battleState.player2Action;
-  
-  // Determinar orden de ataque por velocidad
-  const attacks = [];
-  
-  if (action1.type === 'attack' && !p1.fainted) {
-    attacks.push({
-      attacker: p1,
-      defender: p2,
-      move: action1.move,
-      isPlayer1: true,
-      speed: p1.stats.speed
-    });
+  const isPlayer1Turn = battleState.currentTurnPlayer === 1;
+  const action = isPlayer1Turn ? battleState.player1Action : battleState.player2Action;
+
+  if (!action || action.type !== 'attack') {
+    return [];
   }
-  
-  if (action2.type === 'attack' && !p2.fainted) {
-    attacks.push({
-      attacker: p2,
-      defender: p1,
-      move: action2.move,
-      isPlayer1: false,
-      speed: p2.stats.speed
-    });
-  }
-  
-  // Ordenar por velocidad
-  attacks.sort((a, b) => b.speed - a.speed);
+
+  const attacks = [{
+    attacker: isPlayer1Turn ? p1 : p2,
+    defender: isPlayer1Turn ? p2 : p1,
+    move: action.move,
+    isPlayer1: isPlayer1Turn
+  }];
   
   const results = [];
   
@@ -217,6 +203,7 @@ function processTurn(battleState) {
   }
   
   battleState.turn++;
+  battleState.currentTurnPlayer = battleState.currentTurnPlayer === 1 ? 2 : 1;
   battleState.player1Action = null;
   battleState.player2Action = null;
   
@@ -311,6 +298,7 @@ function setupBattleSocket(io) {
       socket.emit('battle-state', {
         ...battleState,
         isPlayer1,
+        isPlayerTurn: battleState.currentTurnPlayer === (isPlayer1 ? 1 : 2),
         currentPokemon1: battleState.team1[battleState.currentPokemon1Index],
         currentPokemon2: battleState.team2[battleState.currentPokemon2Index]
       });
@@ -334,6 +322,18 @@ function setupBattleSocket(io) {
       
       const isPlayer1 = battleState.player1Id === socket.userId;
       
+      const actingPlayer = isPlayer1 ? 1 : 2;
+
+      if (battleState.currentTurnPlayer !== actingPlayer) {
+        socket.emit('error', { message: 'No es tu turno todavía' });
+        return;
+      }
+
+      if (!action || action.type !== 'attack' || !action.move || !action.move.name) {
+        socket.emit('error', { message: 'Acción inválida' });
+        return;
+      }
+
       if (isPlayer1) {
         battleState.player1Action = action;
       } else {
@@ -342,44 +342,49 @@ function setupBattleSocket(io) {
       
       // Notificar que el jugador eligió su acción
       io.to(`battle-${battleId}`).emit('action-received', {
-        player: isPlayer1 ? 1 : 2,
-        ready: true
+        player: actingPlayer,
+        ready: true,
+        resolving: true
       });
-      
-      // Si ambos jugadores eligieron, procesar turno
-      if (battleState.player1Action && battleState.player2Action) {
-        battleState.status = 'calculating';
-        
-        setTimeout(() => {
-          const results = processTurn(battleState);
-          const endCheck = checkBattleEnd(battleState);
-          
-          // Enviar resultados a ambos jugadores
-          io.to(`battle-${battleId}`).emit('turn-result', {
-            results,
-            turn: battleState.turn,
-            currentPokemon1: battleState.team1[battleState.currentPokemon1Index],
-            currentPokemon2: battleState.team2[battleState.currentPokemon2Index],
-            ended: endCheck.ended,
-            winner: endCheck.winner
+
+      battleState.status = 'calculating';
+
+      setTimeout(() => {
+        const results = processTurn(battleState);
+        const endCheck = checkBattleEnd(battleState);
+
+        io.to(`battle-${battleId}`).emit('turn-result', {
+          results,
+          turn: battleState.turn,
+          currentTurnPlayer: battleState.currentTurnPlayer,
+          currentPokemon1: battleState.team1[battleState.currentPokemon1Index],
+          currentPokemon2: battleState.team2[battleState.currentPokemon2Index],
+          battleLog: battleState.log,
+          ended: endCheck.ended,
+          winner: endCheck.winner,
+          winnerName: endCheck.winner === 'player1' ? battleState.player1Name : battleState.player2Name
+        });
+
+        if (endCheck.ended) {
+          battleState.status = 'completed';
+          io.to(`battle-${battleId}`).emit('battle-end', {
+            winner: endCheck.winner,
+            winnerName: endCheck.winner === 'player1' ? battleState.player1Name : battleState.player2Name
           });
-          
-          if (endCheck.ended) {
-            battleState.status = 'completed';
-            io.to(`battle-${battleId}`).emit('battle-end', {
-              winner: endCheck.winner,
-              winnerName: endCheck.winner === 'player1' ? battleState.player1Name : battleState.player2Name
-            });
-            
-            // Limpiar batalla después de 30 segundos
-            setTimeout(() => {
-              activeBattles.delete(battleId);
-            }, 30000);
-          } else {
-            battleState.status = 'waiting';
-          }
-        }, 1000); // Delay para animaciones
-      }
+
+          setTimeout(() => {
+            activeBattles.delete(battleId);
+          }, 30000);
+        } else {
+          battleState.status = 'waiting';
+        }
+      }, 700);
+    });
+
+    socket.on('leave-battle', (data) => {
+      const { battleId } = data || {};
+      if (!battleId) return;
+      socket.leave(`battle-${battleId}`);
     });
     
     // Desconexión
