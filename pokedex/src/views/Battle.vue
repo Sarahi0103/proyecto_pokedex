@@ -57,6 +57,7 @@ const availableMoves = ref([])
 const isPlayerTurn = ref(false)
 const turnResult = ref(null)
 const latestBattleOutcome = ref(null)
+const displayedMoves = computed(() => (availableMoves.value || []).slice(0, 4))
 
 function setChallengeActionState(challengeId, action) {
   challengeActionState.value = {
@@ -1728,7 +1729,7 @@ function debugBattleSystem() {
           <h3>Selecciona tu movimiento:</h3>
           <div class="moves-grid">
             <button
-              v-for="(move, index) in availableMoves"
+              v-for="(move, index) in displayedMoves"
               :key="index"
               class="move-btn"
               :class="{ selected: selectedMove?.name === move.name }"

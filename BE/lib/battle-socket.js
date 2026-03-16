@@ -109,6 +109,7 @@ async function buildPokemonMoveset(pokemonApiMoves) {
     if (seen.has(move.name)) continue;
     seen.add(move.name);
     uniqueByName.push(move);
+    if (uniqueByName.length >= 4) break;
   }
 
   if (uniqueByName.length === 0) {
@@ -124,10 +125,18 @@ async function enrichTeamPokemonForBattle(teamPokemon) {
 
   let moves = pokemonFromApi.moves;
   if (Array.isArray(teamPokemon?.moves) && teamPokemon.moves.length > 0) {
-    const customMoves = await Promise.all(teamPokemon.moves.map((moveRef) => getMoveData(moveRef)));
+    const customMoves = await Promise.all(teamPokemon.moves.slice(0, 4).map((moveRef) => getMoveData(moveRef)));
     const validCustomMoves = customMoves.filter(Boolean);
     if (validCustomMoves.length > 0) {
-      moves = validCustomMoves;
+      const dedupedCustomMoves = [];
+      const seenCustomMoves = new Set();
+      for (const move of validCustomMoves) {
+        if (!move?.name || seenCustomMoves.has(move.name)) continue;
+        seenCustomMoves.add(move.name);
+        dedupedCustomMoves.push(move);
+        if (dedupedCustomMoves.length >= 4) break;
+      }
+      moves = dedupedCustomMoves;
     }
   }
 
