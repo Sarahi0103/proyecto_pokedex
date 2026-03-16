@@ -1,7 +1,7 @@
 // Service Worker - Pokedex PWA
-const CACHE_NAME = 'pokedex-v17';
-const CACHE_DYNAMIC_NAME = 'pokedex-dynamic-v17';
-const CACHE_IMAGES_NAME = 'pokedex-images-v17';
+const CACHE_NAME = 'pokedex-v18';
+const CACHE_DYNAMIC_NAME = 'pokedex-dynamic-v18';
+const CACHE_IMAGES_NAME = 'pokedex-images-v18';
 
 // APP SHELL - Solo archivos que existen después del build
 const APP_SHELL = [
@@ -73,6 +73,35 @@ self.addEventListener('fetch', event => {
   
   try {
     const url = new URL(request.url);
+
+    const isSameOrigin = url.origin === self.location.origin;
+
+    // Network First para navegación y assets críticos de la app.
+    // Esto evita quedarse pegado a bundles viejos después de deploys en Render.
+    const isAppShellRequest = request.mode === 'navigate' ||
+      url.pathname === '/' ||
+      url.pathname.endsWith('.html') ||
+      url.pathname.startsWith('/assets/') ||
+      url.pathname.endsWith('.js') ||
+      url.pathname.endsWith('.css') ||
+      url.pathname.endsWith('.json');
+
+    if (isSameOrigin && isAppShellRequest) {
+      event.respondWith(
+        fetch(request)
+          .then(networkResponse => {
+            if (networkResponse && networkResponse.status === 200) {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_DYNAMIC_NAME).then(cache => {
+                cache.put(request, responseToCache);
+              });
+            }
+            return networkResponse;
+          })
+          .catch(() => caches.match(request))
+      );
+      return;
+    }
 
     // Network First para endpoints de API que cambian frecuentemente
     const isDynamicAPI = url.pathname.includes('/api/favorites') || 
