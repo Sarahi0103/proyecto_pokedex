@@ -757,6 +757,10 @@ async function sendChallenge() {
     
     console.log('✅ Respuesta del servidor:', response)
 
+    if (response?.battle && response.battle.id !== undefined && response.battle.id !== null) {
+      upsertChallenge(response.battle)
+    }
+
     if (response?.action === 'incoming_pending' && response?.battle?.id) {
       highlightedIncomingChallengeId.value = response.battle.id
       await hydrateChallengeFromBattleId(response.battle.id)

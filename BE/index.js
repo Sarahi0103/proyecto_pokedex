@@ -1079,8 +1079,18 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
       [user.id, opponent.id]
     );
 
+    const mapBattleForUser = (battleRow) => ({
+      ...battleRow,
+      challenger_user_id: battleRow.challenger_user_id ?? battleRow.challenger_id,
+      opponent_user_id: battleRow.opponent_user_id ?? battleRow.opponent_id,
+      is_challenger: battleRow.challenger_id === user.id,
+      is_opponent: battleRow.opponent_id === user.id
+    });
+
     if (pendingBetweenUsers.rows[0]) {
       const existing = pendingBetweenUsers.rows[0];
+      const existingBattle = await getBattleById(existing.id);
+      const normalizedExistingBattle = existingBattle ? mapBattleForUser(existingBattle) : mapBattleForUser(existing);
       if (existing.challenger_id === user.id) {
         // Si ya existe un desafio pendiente enviado por el mismo usuario,
         // reenviar notificacion para robustecer el flujo cuando el receptor no la vio.
@@ -1100,20 +1110,22 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
           });
 
         return res.status(200).json({
-          battle: { id: existing.id },
+          battle: normalizedExistingBattle,
           message: 'Ya tienes un desafío pendiente para este oponente. Se volvió a notificar al rival.',
           action: 'pending_already_sent'
         });
       }
 
       return res.status(200).json({
-        battle: { id: existing.id },
+        battle: normalizedExistingBattle,
         message: 'Ya tienes un desafío pendiente recibido de este oponente. Debes aceptarlo o rechazarlo primero.',
         action: 'incoming_pending'
       });
     }
     
     const battle = await createBattleChallenge(user.id, opponent.id, teamIndexNumber);
+    const createdBattle = await getBattleById(battle.id);
+    const normalizedCreatedBattle = createdBattle ? mapBattleForUser(createdBattle) : mapBattleForUser(battle);
     console.log('  - Desafío creado con ID:', battle?.id);
     
     // Notificar al oponente en tiempo real
@@ -1134,7 +1146,7 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
         }
       });
     
-    res.json({ battle, message: 'Challenge sent!' });
+    res.json({ battle: normalizedCreatedBattle, message: 'Challenge sent!' });
   } catch (e) {
     console.error('Challenge error:', e);
     res.status(500).json({ error: 'Database error' });
