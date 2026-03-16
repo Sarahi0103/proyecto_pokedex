@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import { useNotifications } from '../composables/useNotifications'
 
 const router = useRouter()
 const favorites = ref([])
@@ -11,6 +12,7 @@ const savingMeta = ref(null)
 const editingFavorite = ref(null)
 const aliasInput = ref('')
 const noteInput = ref('')
+const { success, error: showError } = useNotifications()
 
 const typeColors = {
   normal: '#A8A878', fire: '#F08030', water: '#6890F0', electric: '#F8D030',
@@ -42,8 +44,10 @@ async function removeFavorite(pokemonId){
   try{
     await api(`/api/favorites/${pokemonId}`, { method: 'DELETE' })
     favorites.value = favorites.value.filter(f => f.id !== pokemonId)
+    success('Favorito eliminado correctamente')
   }catch(e){
     console.error(e)
+    showError('No se pudo eliminar el favorito')
   }finally{
     deleting.value = null
   }
@@ -79,8 +83,10 @@ async function saveFavoriteMetadata(){
 
     favorites.value = data.favorites || favorites.value
     closeMetadataEditor()
+    success('Cambios del favorito guardados')
   }catch(e){
     console.error(e)
+    showError('No se pudieron guardar los cambios')
   }finally{
     savingMeta.value = null
   }
@@ -217,6 +223,7 @@ onMounted(loadFavorites)
           maxlength="60"
           placeholder="Ej: Mi atacante principal"
         />
+        <div class="modal-counter">{{ aliasInput.length }}/60</div>
 
         <label class="modal-label">Nota (opcional)</label>
         <textarea
@@ -225,6 +232,7 @@ onMounted(loadFavorites)
           maxlength="300"
           placeholder="Ej: útil contra tipo agua"
         ></textarea>
+        <div class="modal-counter">{{ noteInput.length }}/300</div>
 
         <div class="modal-actions">
           <button class="modal-cancel" @click="closeMetadataEditor">Cancelar</button>
@@ -701,6 +709,13 @@ onMounted(loadFavorites)
   justify-content: flex-end;
   gap: 10px;
   margin-top: 14px;
+}
+
+.modal-counter{
+  margin-top: 4px;
+  text-align: right;
+  font-size: 12px;
+  color: #666;
 }
 
 .modal-cancel,

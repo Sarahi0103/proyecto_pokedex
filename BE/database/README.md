@@ -92,7 +92,13 @@ Una vez que ejecutes el script SQL en pgAdmin:
 - `pokemon_name` - Nombre del Pokémon
 - `pokemon_sprite` - URL de la imagen
 - `pokemon_types` - Tipos en formato JSON
+- `alias` - Alias opcional personalizado del favorito
+- `note` - Nota opcional del favorito
 - `created_at` - Fecha de agregado
+
+### **Migraciones disponibles**
+- `BE/database/migration_friends_push.sql` - status de amigos + tabla push_subscriptions
+- `BE/database/migration_favorites_metadata.sql` - columnas alias y note en favorites
 
 ### **Tabla: teams**
 - `id` - ID único

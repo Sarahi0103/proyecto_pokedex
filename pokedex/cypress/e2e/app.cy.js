@@ -286,4 +286,134 @@ describe('E2E Tests - Pokédex Application', () => {
       cy.get('img[data-src]').should('have.length.greaterThan', 0).or('have.length', 0)
     })
   })
+
+  describe('Core Feature Smoke', () => {
+    function mockAuthenticatedSession() {
+      const token = 'test-token'
+      const user = {
+        id: 1,
+        name: 'Smoke Trainer',
+        email: 'smoke@pokedex.com',
+        code: 'SMOKE01'
+      }
+
+      cy.visit('/', {
+        onBeforeLoad(win) {
+          win.localStorage.setItem('token', token)
+          win.localStorage.setItem('user', JSON.stringify(user))
+        }
+      })
+    }
+
+    it('should update favorite metadata without breaking list', () => {
+      mockAuthenticatedSession()
+
+      cy.intercept('GET', '**/api/favorites', {
+        statusCode: 200,
+        body: {
+          favorites: [
+            { id: 25, name: 'pikachu', sprite: '', types: ['electric'], alias: '', note: '' }
+          ]
+        }
+      }).as('getFavorites')
+
+      cy.intercept('PUT', '**/api/favorites/25', {
+        statusCode: 200,
+        body: {
+          favorites: [
+            { id: 25, name: 'pikachu', sprite: '', types: ['electric'], alias: 'Mi Rayo', note: 'Titular' }
+          ]
+        }
+      }).as('updateFavorite')
+
+      cy.contains('Favoritos').click()
+      cy.wait('@getFavorites')
+      cy.contains('pikachu').should('be.visible')
+      cy.get('.edit-btn').first().click()
+      cy.get('.modal-input').clear().type('Mi Rayo')
+      cy.get('.modal-textarea').clear().type('Titular')
+      cy.contains('button', 'Guardar').click()
+      cy.wait('@updateFavorite')
+      cy.contains('Mi Rayo').should('be.visible')
+    })
+
+    it('should apply type1/type2 and region filters', () => {
+      mockAuthenticatedSession()
+
+      cy.intercept('GET', '**/api/region-pokemon/kanto', {
+        statusCode: 200,
+        body: {
+          count: 2,
+          results: [
+            { name: 'bulbasaur', url: 'https://pokeapi.co/api/v2/pokemon/bulbasaur' },
+            { name: 'pikachu', url: 'https://pokeapi.co/api/v2/pokemon/pikachu' }
+          ]
+        }
+      }).as('regionKanto')
+
+      cy.intercept('GET', '**/api/pokemon/bulbasaur', {
+        statusCode: 200,
+        body: {
+          id: 1,
+          name: 'bulbasaur',
+          sprites: { front_default: '', other: { 'official-artwork': { front_default: '' } } },
+          types: [{ slot: 1, type: { name: 'grass' } }, { slot: 2, type: { name: 'poison' } }]
+        }
+      })
+
+      cy.intercept('GET', '**/api/pokemon/pikachu', {
+        statusCode: 200,
+        body: {
+          id: 25,
+          name: 'pikachu',
+          sprites: { front_default: '', other: { 'official-artwork': { front_default: '' } } },
+          types: [{ slot: 1, type: { name: 'electric' } }]
+        }
+      })
+
+      cy.get('select').first().select('Kanto')
+      cy.wait('@regionKanto')
+      cy.get('select').eq(1).select('GRASS')
+      cy.get('select').eq(2).select('POISON')
+      cy.contains('bulbasaur').should('be.visible')
+      cy.contains('pikachu').should('not.exist')
+    })
+
+    it('should send battle challenge request', () => {
+      mockAuthenticatedSession()
+
+      cy.intercept('GET', '**/api/teams', {
+        statusCode: 200,
+        body: {
+          teams: [
+            { name: 'Team 1', pokemons: [{ id: 1, name: 'bulbasaur', sprite: '' }] }
+          ]
+        }
+      }).as('getTeams')
+
+      cy.intercept('GET', '**/api/friends', {
+        statusCode: 200,
+        body: {
+          friends: [{ id: 2, name: 'Gary', code: 'GARY123' }]
+        }
+      }).as('getFriends')
+
+      cy.intercept('GET', '**/api/battles/challenges', {
+        statusCode: 200,
+        body: { challenges: [] }
+      }).as('getChallenges')
+
+      cy.intercept('POST', '**/api/battles/challenge', {
+        statusCode: 200,
+        body: { battle: { id: 99 }, message: 'Challenge sent!' }
+      }).as('sendChallenge')
+
+      cy.contains('Batallas').click()
+      cy.wait(['@getTeams', '@getFriends', '@getChallenges'])
+      cy.get('.team-selector select').select('Team 1 (1 Pokémon)')
+      cy.get('.friend-select-card').first().click()
+      cy.contains('button', 'Enviar Desafío').click()
+      cy.wait('@sendChallenge')
+    })
+  })
 })

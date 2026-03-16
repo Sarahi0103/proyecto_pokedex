@@ -146,6 +146,9 @@ const REGION_TO_GENERATION = {
   paldea: 'generation-ix'
 };
 
+const REGION_CACHE_TTL_MS = 60 * 60 * 1000;
+const regionPokemonCache = new Map();
+
 // Rate limiting configuration
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -483,6 +486,14 @@ app.get('/api/region-pokemon/:region', async (req, res) => {
       return res.status(400).json({ error: 'Unsupported region' });
     }
 
+    const cacheKey = generation;
+    const cached = regionPokemonCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && cached.expiresAt > now) {
+      return res.json(cached.payload);
+    }
+
     const generationResponse = await axios.get(`${POKEAPI}/generation/${generation}`);
     const speciesList = generationResponse.data?.pokemon_species || [];
 
@@ -493,10 +504,17 @@ app.get('/api/region-pokemon/:region', async (req, res) => {
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    res.json({
+    const payload = {
       count: results.length,
       results
+    };
+
+    regionPokemonCache.set(cacheKey, {
+      payload,
+      expiresAt: now + REGION_CACHE_TTL_MS
     });
+
+    res.json(payload);
   } catch (error) {
     console.error('Region pokemon error:', error.message);
     res.status(500).json({ error: 'PokeAPI error' });

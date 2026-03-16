@@ -13,6 +13,8 @@ services:
     buildCommand: cd BE && npm install
     startCommand: cd BE && npm start
     envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -57,6 +59,8 @@ services:
     buildCommand: cd pokedex && npm install && npm run build
     staticPublishPath: ./pokedex/dist
     envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
       - key: VITE_API_BASE
         value: https://pokedex-backend-rzjl.onrender.com
     headers:
