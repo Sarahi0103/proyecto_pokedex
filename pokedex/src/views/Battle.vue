@@ -1022,25 +1022,19 @@ async function pollBattleResult(battleId) {
 }
 
 function showBattleEndNotification(result) {
-  const winnerId = result.winner_id
-  const userEmail = getUserEmailFromToken()
-  
-  // Encontrar mis datos en el resultado
-  let isWinner = false
-  if (result.battle_result && result.battle_result.winner_name) {
-    // Buscar en challenges para obtener info
-    const battle = challenges.value.find(c => c.winner_id === result.winner_id)
-    if (battle) {
-      isWinner = (battle.challenger_email === userEmail && result.winner_id === battle.challenger_user_id) ||
-                 (battle.opponent_email === userEmail && result.winner_id === battle.opponent_user_id)
-    }
-  }
-  
+  const me = currentUser()
+  const winnerId = result?.winner_id || result?.battle_result?.winner_id
+  const loserName = result?.battle_result?.loser_name || 'el oponente'
+  const winnerName = result?.battle_result?.winner_name || 'Ganador'
+  const turns = result?.battle_result?.turns || 0
+
+  const isWinner = !!(me?.id && winnerId && Number(me.id) === Number(winnerId))
+
   if (isWinner) {
-    showNotification('🎉 ¡Victoria!', `Has ganado la batalla en ${result.battle_result?.turns || 0} turnos`)
+    showNotification('🎉 ¡Victoria!', `Has derrotado a ${loserName} en ${turns} turnos`)
     playVictorySound()
   } else {
-    showNotification('💪 Derrota', `El oponente ganó en ${result.battle_result?.turns || 0} turnos`)
+    showNotification('💪 Derrota', `${winnerName} ganó en ${turns} turnos`)
   }
 }
 
@@ -1477,11 +1471,18 @@ function debugBattleSystem() {
       <div v-if="battleResult" class="battle-result">
         <div class="result-content">
           <div class="result-icon">🏆</div>
-          <h2>{{ battleResult.winner }} GANA!</h2>
+          <h2>{{ battleResult.battle_result?.winner_name || 'Ganador' }} GANA!</h2>
+          <p class="result-subtitle" v-if="battleResult.battle_result?.loser_name">
+            {{ battleResult.battle_result.winner_name }} derrotó a {{ battleResult.battle_result.loser_name }}
+          </p>
           <div class="result-stats">
             <div class="stat-box">
-              <div class="stat-label">Puntuación</div>
-              <div class="stat-value">{{ battleResult.challengerScore?.toFixed(1) }} - {{ battleResult.opponentScore?.toFixed(1) }}</div>
+              <div class="stat-label">Turnos</div>
+              <div class="stat-value">{{ battleResult.battle_result?.turns || 0 }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Pokémon restantes</div>
+              <div class="stat-value">{{ battleResult.battle_result?.team1_remaining ?? 0 }} - {{ battleResult.battle_result?.team2_remaining ?? 0 }}</div>
             </div>
           </div>
         </div>

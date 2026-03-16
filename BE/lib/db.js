@@ -1,7 +1,7 @@
-const { Pool } = require('pg');
+﻿const { Pool } = require('pg');
 
-// Configuración de PostgreSQL
-// Soporta tanto DATABASE_URL (producción) como variables individuales (desarrollo)
+// Configuraci├│n de PostgreSQL
+// Soporta tanto DATABASE_URL (producci├│n) como variables individuales (desarrollo)
 const pool = new Pool(
   process.env.DATABASE_URL
     ? {
@@ -16,23 +16,23 @@ const pool = new Pool(
         database: process.env.DB_NAME || 'pokedex',
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || '123',
-        max: 20, // Máximo de conexiones en el pool
+        max: 20, // M├íximo de conexiones en el pool
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
       }
 );
 
-// Verificar conexión (solo una vez al inicio)
+// Verificar conexi├│n (solo una vez al inicio)
 let connected = false;
 pool.on('connect', () => {
   if (!connected) {
-    console.log('✅ Conectado a PostgreSQL');
+    console.log('Ô£à Conectado a PostgreSQL');
     connected = true;
   }
 });
 
 pool.on('error', (err) => {
-  console.error('❌ Error en PostgreSQL:', err);
+  console.error('ÔØî Error en PostgreSQL:', err);
   process.exit(-1);
 });
 
@@ -46,12 +46,12 @@ async function getUserByEmail(email) {
 }
 
 async function getUserByCode(code) {
-  console.log('🔍 Buscando usuario con código:', code);
-  // Usar ILIKE para búsqueda case-insensitive
+  console.log('­ƒöì Buscando usuario con c├│digo:', code);
+  // Usar ILIKE para b├║squeda case-insensitive
   const result = await pool.query('SELECT * FROM users WHERE code ILIKE $1', [code]);
-  console.log('📊 Resultados encontrados:', result.rows.length);
+  console.log('­ƒôè Resultados encontrados:', result.rows.length);
   if (result.rows.length > 0) {
-    console.log('✅ Usuario encontrado:', result.rows[0].email);
+    console.log('Ô£à Usuario encontrado:', result.rows[0].email);
   }
   return result.rows[0] || null;
 }
@@ -145,7 +145,7 @@ async function updateTeam(userId, teamIndex, teamData) {
   const { name, pokemons } = teamData;
   const pokemonsJson = JSON.stringify(pokemons || []);
   
-  // Obtener el ID del equipo basado en el índice
+  // Obtener el ID del equipo basado en el ├¡ndice
   const teams = await pool.query(
     'SELECT id FROM teams WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1 OFFSET $2',
     [userId, teamIndex]
@@ -161,7 +161,7 @@ async function updateTeam(userId, teamIndex, teamData) {
 }
 
 async function deleteTeam(userId, teamIndex) {
-  // Obtener el ID del equipo basado en el índice
+  // Obtener el ID del equipo basado en el ├¡ndice
   const teams = await pool.query(
     'SELECT id FROM teams WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1 OFFSET $2',
     [userId, teamIndex]
@@ -179,7 +179,7 @@ async function deleteTeam(userId, teamIndex) {
 
 async function getFriends(userId) {
   try {
-    // Intentar con status (nueva versión)
+    // Intentar con status (nueva versi├│n)
     const result = await pool.query(
       `SELECT u.id, u.name, u.email, u.code 
        FROM friends f 
@@ -190,9 +190,9 @@ async function getFriends(userId) {
     );
     return result.rows;
   } catch (error) {
-    // Si falla por columna inexistente, devolver todos los amigos (versión antigua)
+    // Si falla por columna inexistente, devolver todos los amigos (versi├│n antigua)
     if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Usando versión antigua de friends (sin filtro de status)');
+      console.log('ÔÜá´©Å  Usando versi├│n antigua de friends (sin filtro de status)');
       const result = await pool.query(
         `SELECT u.id, u.name, u.email, u.code 
          FROM friends f 
@@ -208,7 +208,7 @@ async function getFriends(userId) {
 }
 
 async function addFriend(userId, friendId) {
-  // Intentar con status (nueva versión con migración)
+  // Intentar con status (nueva versi├│n con migraci├│n)
   try {
     await pool.query(
       `INSERT INTO friends (user_id, friend_id, status) 
@@ -219,14 +219,14 @@ async function addFriend(userId, friendId) {
   } catch (error) {
     // Si falla por columna inexistente, usar version antigua (sin status)
     if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Usando versión antigua de friends (sin columna status)');
+      console.log('ÔÜá´©Å  Usando versi├│n antigua de friends (sin columna status)');
       await pool.query(
         `INSERT INTO friends (user_id, friend_id) 
          VALUES ($1, $2) 
          ON CONFLICT (user_id, friend_id) DO NOTHING`,
         [userId, friendId]
       );
-      // Agregar la relación bidireccional inmediatamente
+      // Agregar la relaci├│n bidireccional inmediatamente
       await pool.query(
         `INSERT INTO friends (user_id, friend_id) 
          VALUES ($1, $2) 
@@ -241,7 +241,7 @@ async function addFriend(userId, friendId) {
 }
 
 async function getPendingFriendRequests(userId) {
-  // Intentar con status (nueva versión con migración)
+  // Intentar con status (nueva versi├│n con migraci├│n)
   try {
     const result = await pool.query(
       `SELECT u.id, u.name, u.email, u.code, f.created_at, f.id as friendship_id
@@ -253,16 +253,16 @@ async function getPendingFriendRequests(userId) {
     );
     return result.rows;
   } catch (error) {
-    // Si falla por columna inexistente, devolver array vacío
+    // Si falla por columna inexistente, devolver array vac├¡o
     if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Columna status no existe, devolviendo array vacío para pending requests');
+      console.log('ÔÜá´©Å  Columna status no existe, devolviendo array vac├¡o para pending requests');
       return [];
     }
     throw error;
   }
 }
 
-// Obtener solicitudes que YO envié (esperando respuesta)
+// Obtener solicitudes que YO envi├® (esperando respuesta)
 async function getSentFriendRequests(userId) {
   try {
     const result = await pool.query(
@@ -276,7 +276,7 @@ async function getSentFriendRequests(userId) {
     return result.rows;
   } catch (error) {
     if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Columna status no existe, devolviendo array vacío para sent requests');
+      console.log('ÔÜá´©Å  Columna status no existe, devolviendo array vac├¡o para sent requests');
       return [];
     }
     throw error;
@@ -293,7 +293,7 @@ async function acceptFriendRequest(userId, friendId) {
       [friendId, userId]
     );
     
-    // Crear la relación bidireccional (el otro lado)
+    // Crear la relaci├│n bidireccional (el otro lado)
     await pool.query(
       `INSERT INTO friends (user_id, friend_id, status) 
        VALUES ($1, $2, 'accepted') 
@@ -301,9 +301,9 @@ async function acceptFriendRequest(userId, friendId) {
       [userId, friendId]
     );
   } catch (error) {
-    // Si falla por columna inexistente, la relación ya existe (versión antigua)
+    // Si falla por columna inexistente, la relaci├│n ya existe (versi├│n antigua)
     if (error.message.includes('column "status"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Columna status no existe, la relación ya es bidireccional');
+      console.log('ÔÜá´©Å  Columna status no existe, la relaci├│n ya es bidireccional');
       return true;
     }
     throw error;
@@ -336,7 +336,7 @@ async function removeFriend(userId, friendId) {
 
 async function savePushSubscription(userId, subscription) {
   try {
-    console.log('\n💾 ============ GUARDANDO SUSCRIPCIÓN PUSH ============');
+    console.log('\n­ƒÆ¥ ============ GUARDANDO SUSCRIPCI├ôN PUSH ============');
     console.log('   User ID:', userId);
     console.log('   Endpoint:', subscription.endpoint.substring(0, 60) + '...');
     console.log('   Keys:', {
@@ -354,7 +354,7 @@ async function savePushSubscription(userId, subscription) {
       [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
     );
     
-    console.log('✅ Query ejecutado exitosamente');
+    console.log('Ô£à Query ejecutado exitosamente');
     console.log('   Registro guardado:', {
       id: result.rows[0].id,
       user_id: result.rows[0].user_id,
@@ -363,7 +363,7 @@ async function savePushSubscription(userId, subscription) {
     console.log('========================================================\n');
     return true;
   } catch (error) {
-    console.error('\n❌ ============ ERROR GUARDANDO SUSCRIPCIÓN ============');
+    console.error('\nÔØî ============ ERROR GUARDANDO SUSCRIPCI├ôN ============');
     console.error('   Error message:', error.message);
     console.error('   Error code:', error.code);
     console.error('   Error detail:', error.detail);
@@ -372,7 +372,7 @@ async function savePushSubscription(userId, subscription) {
     
     // Si la tabla no existe, solo registrar en consola pero no fallar
     if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Tabla push_subscriptions no existe. Ejecuta la migración para habilitar notificaciones push.');
+      console.log('ÔÜá´©Å  Tabla push_subscriptions no existe. Ejecuta la migraci├│n para habilitar notificaciones push.');
       return false;
     }
     throw error;
@@ -381,14 +381,14 @@ async function savePushSubscription(userId, subscription) {
 
 async function getPushSubscriptions(userId) {
   try {
-    console.log(`📱 Buscando suscripciones para userId: ${userId}`);
+    console.log(`­ƒô▒ Buscando suscripciones para userId: ${userId}`);
     
     const result = await pool.query(
       'SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions WHERE user_id = $1',
       [userId]
     );
     
-    console.log(`📊 Encontradas ${result.rows.length} suscripción(es)`);
+    console.log(`­ƒôè Encontradas ${result.rows.length} suscripci├│n(es)`);
     
     return result.rows.map(row => ({
       endpoint: row.endpoint,
@@ -398,12 +398,12 @@ async function getPushSubscriptions(userId) {
       }
     }));
   } catch (error) {
-    // Si la tabla no existe, devolver array vacío
+    // Si la tabla no existe, devolver array vac├¡o
     if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Tabla push_subscriptions no existe, devolviendo array vacío');
+      console.log('ÔÜá´©Å  Tabla push_subscriptions no existe, devolviendo array vac├¡o');
       return [];
     }
-    console.error('❌ Error obteniendo suscripciones:', error);
+    console.error('ÔØî Error obteniendo suscripciones:', error);
     throw error;
   }
 }
@@ -418,7 +418,7 @@ async function removePushSubscription(userId, endpoint) {
   } catch (error) {
     // Si la tabla no existe, no hacer nada
     if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
-      console.log('⚠️  Tabla push_subscriptions no existe');
+      console.log('ÔÜá´©Å  Tabla push_subscriptions no existe');
       return false;
     }
     throw error;
@@ -426,7 +426,7 @@ async function removePushSubscription(userId, endpoint) {
 }
 
 // ============================================
-// BATALLAS EN LÍNEA
+// BATALLAS EN L├ìNEA
 // ============================================
 
 async function createBattleChallenge(challengerId, opponentId, teamIndex) {
@@ -476,7 +476,7 @@ async function getPendingChallenges(userId) {
 }
 
 async function acceptBattleChallenge(battleId, opponentTeamIndex) {
-  console.log(`💾 Guardando en BD - Battle ID: ${battleId}, Opponent Team Index: ${opponentTeamIndex}`);
+  console.log(`­ƒÆ¥ Guardando en BD - Battle ID: ${battleId}, Opponent Team Index: ${opponentTeamIndex}`);
   
   const result = await pool.query(
     `UPDATE battle_challenges 
@@ -486,7 +486,7 @@ async function acceptBattleChallenge(battleId, opponentTeamIndex) {
   );
   
   const updated = result.rows[0];
-  console.log(`✅ Batalla actualizada - Status: ${updated.status}, Opponent Team Index: ${updated.opponent_team_index}`);
+  console.log(`Ô£à Batalla actualizada - Status: ${updated.status}, Opponent Team Index: ${updated.opponent_team_index}`);
   
   return updated;
 }
@@ -515,7 +515,7 @@ async function getBattleById(battleId) {
   
   const battle = result.rows[0];
   if (battle && battle.battle_result) {
-    // Asegurar que battle_result esté parseado como objeto
+    // Asegurar que battle_result est├® parseado como objeto
     if (typeof battle.battle_result === 'string') {
       battle.battle_result = JSON.parse(battle.battle_result);
     }
@@ -548,7 +548,7 @@ async function updateBattleStatus(battleId, status, requiredCurrentStatus = null
   query += ` RETURNING *`;
   
   const result = await pool.query(query, params);
-  return result.rows[0]; // null si no se actualizó (lock falló)
+  return result.rows[0]; // null si no se actualiz├│ (lock fall├│)
 }
 
 async function submitBattleAction(battleId, userId, action) {
@@ -603,341 +603,429 @@ async function getUserBattleHistory(userId) {
   return result.rows;
 }
 
-// Ejecutar batalla automáticamente con sistema de turnos
+const TYPE_EFFECTIVENESS = {
+  normal: { rock: 0.5, ghost: 0, steel: 0.5 },
+  fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+  water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
+  electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
+  grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
+  ice: { fire: 0.5, water: 0.5, grass: 2, ground: 2, flying: 2, dragon: 2, steel: 0.5 },
+  fighting: { normal: 2, ice: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 2, ghost: 0, dark: 2, steel: 2, fairy: 0.5 },
+  poison: { grass: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0, fairy: 2 },
+  ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
+  flying: { electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
+  psychic: { fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 },
+  bug: { fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5, fairy: 0.5 },
+  rock: { fire: 2, ice: 2, fighting: 0.5, ground: 0.5, flying: 2, bug: 2, steel: 0.5 },
+  ghost: { normal: 0, psychic: 2, ghost: 2, dark: 0.5 },
+  dragon: { dragon: 2, steel: 0.5, fairy: 0 },
+  dark: { fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, fairy: 0.5 },
+  steel: { fire: 0.5, water: 0.5, electric: 0.5, ice: 2, rock: 2, steel: 0.5, fairy: 2 },
+  fairy: { fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 }
+};
+
+function readStat(stats, statName, fallback = 50) {
+  if (Array.isArray(stats)) {
+    const found = stats.find((s) => (s?.stat?.name || s?.name) === statName);
+    const value = found?.base_stat ?? found?.baseStat ?? found?.value;
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (stats && typeof stats === 'object') {
+    const direct = stats[statName] ?? stats[statName.replace('-', '_')];
+    if (Number.isFinite(direct)) return direct;
+    if (direct && typeof direct === 'object') {
+      const nested = direct.base_stat ?? direct.baseStat ?? direct.value;
+      if (Number.isFinite(nested)) return nested;
+    }
+  }
+
+  return fallback;
+}
+
+function getPokemonTypes(pokemon) {
+  if (!pokemon?.types || !Array.isArray(pokemon.types)) {
+    return ['normal'];
+  }
+
+  const types = pokemon.types
+    .map((t) => t?.type?.name || t?.name || (typeof t === 'string' ? t : null))
+    .filter(Boolean);
+
+  return types.length > 0 ? types : ['normal'];
+}
+
+function normalizePokemonForBattle(pokemon, trainerName) {
+  const hp = readStat(pokemon?.stats, 'hp', 100);
+
+  return {
+    ...pokemon,
+    name: pokemon?.name || `pokemon-${pokemon?.id || Math.floor(Math.random() * 10000)}`,
+    id: pokemon?.id || null,
+    sprite: pokemon?.sprite || pokemon?.sprites?.front_default || pokemon?.sprites?.other?.['official-artwork']?.front_default || null,
+    types: getPokemonTypes(pokemon),
+    maxHP: Math.max(1, hp),
+    currentHP: Math.max(1, hp),
+    attack: readStat(pokemon?.stats, 'attack', 50),
+    defense: readStat(pokemon?.stats, 'defense', 50),
+    spAttack: readStat(pokemon?.stats, 'special-attack', 50),
+    spDefense: readStat(pokemon?.stats, 'special-defense', 50),
+    speed: readStat(pokemon?.stats, 'speed', 50),
+    trainer: trainerName,
+    fainted: false,
+    totalDamageDone: 0,
+    totalDamageTaken: 0,
+    knocks: 0
+  };
+}
+
+function getTypeMultiplier(moveType, defenderTypes) {
+  const chart = TYPE_EFFECTIVENESS[moveType] || {};
+  return defenderTypes.reduce((acc, type) => acc * (chart[type] ?? 1), 1);
+}
+
+function chooseAttackType(attacker, defender) {
+  const attackerTypes = attacker.types || ['normal'];
+  const defenderTypes = defender.types || ['normal'];
+
+  let bestType = attackerTypes[0] || 'normal';
+  let bestMultiplier = -1;
+
+  for (const type of attackerTypes) {
+    const multiplier = getTypeMultiplier(type, defenderTypes);
+    if (multiplier > bestMultiplier) {
+      bestMultiplier = multiplier;
+      bestType = type;
+    }
+  }
+
+  return {
+    moveType: bestType,
+    typeMultiplier: bestMultiplier <= 0 ? 1 : bestMultiplier
+  };
+}
+
+function calculateDamage(attacker, defender) {
+  const level = 50;
+  const isSpecial = attacker.spAttack >= attacker.attack;
+  const offensive = isSpecial ? attacker.spAttack : attacker.attack;
+  const defensive = Math.max(1, isSpecial ? defender.spDefense : defender.defense);
+  const power = (isSpecial ? 75 : 70) + Math.min(25, Math.floor(attacker.speed / 8)) + Math.floor(Math.random() * 11);
+
+  const { moveType, typeMultiplier } = chooseAttackType(attacker, defender);
+  const stab = attacker.types.includes(moveType) ? 1.2 : 1;
+  const critChance = Math.min(0.12, 0.04 + (attacker.speed / 5000));
+  const isCritical = Math.random() < critChance;
+  const critical = isCritical ? 1.5 : 1;
+  const random = 0.9 + Math.random() * 0.1;
+
+  const rawDamage = Math.floor(
+    (((((2 * level) / 5 + 2) * power * offensive) / defensive) / 50 + 2) *
+      stab * typeMultiplier * critical * random
+  );
+
+  return {
+    damage: Math.max(1, rawDamage),
+    details: {
+      category: isSpecial ? 'special' : 'physical',
+      moveType,
+      typeMultiplier,
+      critical: isCritical,
+      power
+    }
+  };
+}
+
+function serializePokemonCombatData(p) {
+  return {
+    name: p.name,
+    id: p.id,
+    sprite: p.sprite,
+    types: p.types,
+    currentHP: Math.max(0, p.currentHP),
+    maxHP: p.maxHP,
+    attack: p.attack,
+    defense: p.defense,
+    spAttack: p.spAttack,
+    spDefense: p.spDefense,
+    speed: p.speed
+  };
+}
+
+function determineWinnerFromState(battle, team1, team2, damageByTeam1, damageByTeam2) {
+  const team1Alive = team1.filter((p) => !p.fainted).length;
+  const team2Alive = team2.filter((p) => !p.fainted).length;
+  const team1RemainingHP = team1.reduce((sum, p) => sum + Math.max(0, p.currentHP), 0);
+  const team2RemainingHP = team2.reduce((sum, p) => sum + Math.max(0, p.currentHP), 0);
+
+  if (team1Alive > team2Alive) {
+    return { winnerId: battle.challenger_id, winnerName: battle.challenger_name, loserId: battle.opponent_id, loserName: battle.opponent_name, reason: 'more_pokemon_alive' };
+  }
+
+  if (team2Alive > team1Alive) {
+    return { winnerId: battle.opponent_id, winnerName: battle.opponent_name, loserId: battle.challenger_id, loserName: battle.challenger_name, reason: 'more_pokemon_alive' };
+  }
+
+  if (team1RemainingHP > team2RemainingHP) {
+    return { winnerId: battle.challenger_id, winnerName: battle.challenger_name, loserId: battle.opponent_id, loserName: battle.opponent_name, reason: 'higher_remaining_hp' };
+  }
+
+  if (team2RemainingHP > team1RemainingHP) {
+    return { winnerId: battle.opponent_id, winnerName: battle.opponent_name, loserId: battle.challenger_id, loserName: battle.challenger_name, reason: 'higher_remaining_hp' };
+  }
+
+  if (damageByTeam1 > damageByTeam2) {
+    return { winnerId: battle.challenger_id, winnerName: battle.challenger_name, loserId: battle.opponent_id, loserName: battle.opponent_name, reason: 'higher_total_damage' };
+  }
+
+  if (damageByTeam2 > damageByTeam1) {
+    return { winnerId: battle.opponent_id, winnerName: battle.opponent_name, loserId: battle.challenger_id, loserName: battle.challenger_name, reason: 'higher_total_damage' };
+  }
+
+  return { winnerId: battle.challenger_id, winnerName: battle.challenger_name, loserId: battle.opponent_id, loserName: battle.opponent_name, reason: 'sudden_death_tiebreaker' };
+}
+
 async function executeBattle(battleId) {
-  // Obtener la batalla
   const battle = await getBattleById(battleId);
   if (!battle) {
     throw new Error('Batalla no encontrada');
   }
 
-  // Permitir ejecución si está en 'accepted' o 'in_progress'
   if (battle.status !== 'accepted' && battle.status !== 'in_progress') {
     throw new Error(`La batalla debe estar en estado "accepted" o "in_progress", estado actual: ${battle.status}`);
   }
 
-  // Validar que ambos equipos estén seleccionados
   if (battle.challenger_team_index === null || battle.challenger_team_index === undefined) {
     throw new Error('El retador no ha seleccionado un equipo');
   }
-  
   if (battle.opponent_team_index === null || battle.opponent_team_index === undefined) {
     throw new Error('El oponente no ha seleccionado un equipo');
   }
 
-  // Obtener todos los equipos de ambos usuarios
   const challengerTeams = await getTeams(battle.challenger_id);
   const opponentTeams = await getTeams(battle.opponent_id);
-  
-  console.log(`⚔️ Ejecutando batalla ${battleId}:`);
-  console.log(`  - Retador: ${battle.challenger_name} (ID: ${battle.challenger_id}, Team Index: ${battle.challenger_team_index})`);
-  console.log(`  - Oponente: ${battle.opponent_name} (ID: ${battle.opponent_id}, Team Index: ${battle.opponent_team_index})`);
-  console.log(`  - Equipos retador:`, challengerTeams.length);
-  console.log(`  - Equipos oponente:`, opponentTeams.length);
-
-  // Obtener el equipo específico por índice
   const team1 = challengerTeams[battle.challenger_team_index];
   const team2 = opponentTeams[battle.opponent_team_index];
 
-  if (!team1) {
-    throw new Error(`Equipo del retador no encontrado (índice: ${battle.challenger_team_index})`);
-  }
-  if (!team2) {
-    throw new Error(`Equipo del oponente no encontrado (índice: ${battle.opponent_team_index})`);
-  }
-  
-  console.log(`  - Equipo 1 (${team1.name}):`, team1.pokemons?.map(p => p.name).join(', '));
-  console.log(`  - Equipo 2 (${team2.name}):`, team2.pokemons?.map(p => p.name).join(', '));
+  if (!team1) throw new Error(`Equipo del retador no encontrado (indice: ${battle.challenger_team_index})`);
+  if (!team2) throw new Error(`Equipo del oponente no encontrado (indice: ${battle.opponent_team_index})`);
 
-  // Los equipos ya vienen con el formato correcto { name, pokemons }
-  const team1Pokemon = team1.pokemons;
-  const team2Pokemon = team2.pokemons;
+  const team1Raw = Array.isArray(team1.pokemons) ? team1.pokemons : [];
+  const team2Raw = Array.isArray(team2.pokemons) ? team2.pokemons : [];
 
-  // Validar que los equipos no estén vacíos
-  if (!team1Pokemon || team1Pokemon.length === 0) {
-    throw new Error(`El equipo del retador está vacío`);
-  }
-  if (!team2Pokemon || team2Pokemon.length === 0) {
-    throw new Error(`El equipo del oponente está vacío`);
-  }
+  if (team1Raw.length === 0) throw new Error('El equipo del retador esta vacio');
+  if (team2Raw.length === 0) throw new Error('El equipo del oponente esta vacio');
 
-  // Sistema de batalla por turnos
-  const battleLog = [];
+  const team1Pokemon = team1Raw.map((pokemon) => normalizePokemonForBattle(pokemon, battle.challenger_name));
+  const team2Pokemon = team2Raw.map((pokemon) => normalizePokemonForBattle(pokemon, battle.opponent_name));
+
+  const battleLog = [
+    {
+      type: 'start',
+      message: `Batalla entre ${battle.challenger_name} y ${battle.opponent_name}`,
+      teams: {
+        challenger: team1Pokemon.map((p) => p.name),
+        opponent: team2Pokemon.map((p) => p.name)
+      },
+      timestamp: Date.now()
+    }
+  ];
   const turns = [];
-  
-  battleLog.push({
-    type: 'start',
-    message: `⚔️ ¡Batalla entre ${battle.challenger_name} y ${battle.opponent_name}!`,
-    timestamp: Date.now()
-  });
 
-  // Preparar Pokémon para batalla (clonar con HP actual)
-  const preparePokemon = (pokemon, trainer) => {
-    // Función helper para obtener stat de forma segura
-    const getStat = (statName, defaultValue = 50) => {
-      if (!pokemon.stats || !Array.isArray(pokemon.stats)) {
-        return defaultValue;
-      }
-      const stat = pokemon.stats.find(s => s.stat?.name === statName);
-      return stat?.base_stat || defaultValue;
-    };
+  let team1Index = 0;
+  let team2Index = 0;
+  let turnNumber = 0;
+  const MAX_TURNS = 220;
+  let team1TotalDamage = 0;
+  let team2TotalDamage = 0;
 
-    return {
-      ...pokemon,
-      currentHP: getStat('hp', 100),
-      maxHP: getStat('hp', 100),
-      attack: getStat('attack', 50),
-      defense: getStat('defense', 50),
-      speed: getStat('speed', 50),
-      spAttack: getStat('special-attack', 50),
-      spDefense: getStat('special-defense', 50),
-      trainer: trainer,
-      fainted: false
-    };
+  const performAttack = (attacker, defender, isTeam1Attacker) => {
+    const { damage, details } = calculateDamage(attacker, defender);
+    const appliedDamage = Math.min(defender.currentHP, damage);
+
+    defender.currentHP = Math.max(0, defender.currentHP - damage);
+    defender.totalDamageTaken += appliedDamage;
+    attacker.totalDamageDone += appliedDamage;
+
+    if (isTeam1Attacker) team1TotalDamage += appliedDamage;
+    else team2TotalDamage += appliedDamage;
+
+    const fainted = defender.currentHP <= 0;
+    if (fainted) {
+      defender.fainted = true;
+      attacker.knocks += 1;
+    }
+
+    const effectiveness = details.typeMultiplier > 1
+      ? 'super efectivo'
+      : (details.typeMultiplier < 1 ? 'poco efectivo' : 'efectividad neutra');
+
+    battleLog.push({
+      type: 'attack',
+      turn: turnNumber,
+      message: `${attacker.name} uso un ataque ${details.category} (${details.moveType}) e hizo ${appliedDamage} de dano (${effectiveness})`,
+      attacker: serializePokemonCombatData(attacker),
+      defender: serializePokemonCombatData(defender),
+      damage: appliedDamage,
+      attack_meta: details,
+      timestamp: Date.now()
+    });
+
+    turns.push({
+      turn: turnNumber,
+      attacker: attacker.name,
+      defender: defender.name,
+      damage: appliedDamage,
+      remainingHP: defender.currentHP,
+      moveType: details.moveType,
+      category: details.category,
+      typeMultiplier: details.typeMultiplier,
+      critical: details.critical
+    });
+
+    if (fainted) {
+      battleLog.push({
+        type: 'faint',
+        turn: turnNumber,
+        message: `${defender.name} ha sido debilitado`,
+        pokemon: defender.name,
+        timestamp: Date.now()
+      });
+    }
+
+    return fainted;
   };
 
-  let pokemon1 = team1Pokemon.map(p => preparePokemon(p, battle.challenger_name));
-  let pokemon2 = team2Pokemon.map(p => preparePokemon(p, battle.opponent_name));
+  while (team1Index < team1Pokemon.length && team2Index < team2Pokemon.length && turnNumber < MAX_TURNS) {
+    turnNumber += 1;
+    const active1 = team1Pokemon[team1Index];
+    const active2 = team2Pokemon[team2Index];
 
-  let currentPokemon1Index = 0;
-  let currentPokemon2Index = 0;
-  let turnNumber = 0;
-  const MAX_TURNS = 100; // Límite de seguridad
+    const team1First = active1.speed === active2.speed
+      ? Math.random() >= 0.5
+      : active1.speed > active2.speed;
 
-  // Batalla por turnos
-  while (currentPokemon1Index < pokemon1.length && 
-         currentPokemon2Index < pokemon2.length && 
-         turnNumber < MAX_TURNS) {
-    
-    turnNumber++;
-    const attacker1 = pokemon1[currentPokemon1Index];
-    const attacker2 = pokemon2[currentPokemon2Index];
+    const first = team1First
+      ? { attacker: active1, defender: active2, isTeam1: true }
+      : { attacker: active2, defender: active1, isTeam1: false };
 
-    // Determinar quién ataca primero basado en velocidad
-    const firstAttacker = attacker1.speed >= attacker2.speed ? 
-      { pokemon: attacker1, opponent: attacker2, isTeam1: true } : 
-      { pokemon: attacker2, opponent: attacker1, isTeam1: false };
-    
-    const secondAttacker = attacker1.speed >= attacker2.speed ? 
-      { pokemon: attacker2, opponent: attacker1, isTeam1: false } : 
-      { pokemon: attacker1, opponent: attacker2, isTeam1: true };
+    const second = team1First
+      ? { attacker: active2, defender: active1, isTeam1: false }
+      : { attacker: active1, defender: active2, isTeam1: true };
 
-    // Turno del primer atacante
-    if (!firstAttacker.pokemon.fainted && !firstAttacker.opponent.fainted) {
-      const damage = calculateDamage(firstAttacker.pokemon, firstAttacker.opponent);
-      firstAttacker.opponent.currentHP -= damage;
-      
-      turns.push({
-        turn: turnNumber,
-        attacker: firstAttacker.pokemon.name,
-        defender: firstAttacker.opponent.name,
-        damage: damage,
-        remainingHP: Math.max(0, firstAttacker.opponent.currentHP)
-      });
-
-      battleLog.push({
-        type: 'attack',
-        turn: turnNumber,
-        message: `${firstAttacker.pokemon.name} ataca a ${firstAttacker.opponent.name} causando ${damage} de daño!`,
-        attacker: {
-          name: firstAttacker.pokemon.name,
-          id: firstAttacker.pokemon.id,
-          sprite: firstAttacker.pokemon.sprite,
-          currentHP: firstAttacker.pokemon.currentHP,
-          maxHP: firstAttacker.pokemon.maxHP,
-          attack: firstAttacker.pokemon.attack,
-          defense: firstAttacker.pokemon.defense,
-          speed: firstAttacker.pokemon.speed
-        },
-        defender: {
-          name: firstAttacker.opponent.name,
-          id: firstAttacker.opponent.id,
-          sprite: firstAttacker.opponent.sprite,
-          currentHP: Math.max(0, firstAttacker.opponent.currentHP),
-          maxHP: firstAttacker.opponent.maxHP,
-          attack: firstAttacker.opponent.attack,
-          defense: firstAttacker.opponent.defense,
-          speed: firstAttacker.opponent.speed
-        },
-        damage: damage,
-        timestamp: Date.now()
-      });
-
-      if (firstAttacker.opponent.currentHP <= 0) {
-        firstAttacker.opponent.fainted = true;
-        firstAttacker.opponent.currentHP = 0;
-        
-        battleLog.push({
-          type: 'faint',
-          message: `¡${firstAttacker.opponent.name} ha sido debilitado!`,
-          pokemon: firstAttacker.opponent.name,
-          timestamp: Date.now()
-        });
-
-        // Siguiente Pokémon
-        if (firstAttacker.isTeam1) {
-          currentPokemon2Index++;
-          if (currentPokemon2Index < pokemon2.length) {
-            battleLog.push({
-              type: 'switch',
-              message: `${battle.opponent_name} envía a ${pokemon2[currentPokemon2Index].name}!`,
-              pokemon: pokemon2[currentPokemon2Index].name,
-              timestamp: Date.now()
-            });
-          }
-        } else {
-          currentPokemon1Index++;
-          if (currentPokemon1Index < pokemon1.length) {
-            battleLog.push({
-              type: 'switch',
-              message: `${battle.challenger_name} envía a ${pokemon1[currentPokemon1Index].name}!`,
-              pokemon: pokemon1[currentPokemon1Index].name,
-              timestamp: Date.now()
-            });
-          }
+    const firstFainted = performAttack(first.attacker, first.defender, first.isTeam1);
+    if (firstFainted) {
+      if (first.isTeam1) {
+        team2Index += 1;
+        if (team2Index < team2Pokemon.length) {
+          battleLog.push({
+            type: 'switch',
+            turn: turnNumber,
+            message: `${battle.opponent_name} envia a ${team2Pokemon[team2Index].name}`,
+            pokemon: team2Pokemon[team2Index].name,
+            timestamp: Date.now()
+          });
         }
-        continue;
+      } else {
+        team1Index += 1;
+        if (team1Index < team1Pokemon.length) {
+          battleLog.push({
+            type: 'switch',
+            turn: turnNumber,
+            message: `${battle.challenger_name} envia a ${team1Pokemon[team1Index].name}`,
+            pokemon: team1Pokemon[team1Index].name,
+            timestamp: Date.now()
+          });
+        }
       }
+      continue;
     }
 
-    // Turno del segundo atacante (si sigue vivo)
-    if (!secondAttacker.pokemon.fainted && !secondAttacker.opponent.fainted) {
-      const damage = calculateDamage(secondAttacker.pokemon, secondAttacker.opponent);
-      secondAttacker.opponent.currentHP -= damage;
-      
-      turns.push({
-        turn: turnNumber,
-        attacker: secondAttacker.pokemon.name,
-        defender: secondAttacker.opponent.name,
-        damage: damage,
-        remainingHP: Math.max(0, secondAttacker.opponent.currentHP)
-      });
-
-      battleLog.push({
-        type: 'attack',
-        turn: turnNumber,
-        message: `${secondAttacker.pokemon.name} ataca a ${secondAttacker.opponent.name} causando ${damage} de daño!`,
-        attacker: {
-          name: secondAttacker.pokemon.name,
-          id: secondAttacker.pokemon.id,
-          sprite: secondAttacker.pokemon.sprite,
-          currentHP: secondAttacker.pokemon.currentHP,
-          maxHP: secondAttacker.pokemon.maxHP,
-          attack: secondAttacker.pokemon.attack,
-          defense: secondAttacker.pokemon.defense,
-          speed: secondAttacker.pokemon.speed
-        },
-        defender: {
-          name: secondAttacker.opponent.name,
-          id: secondAttacker.opponent.id,
-          sprite: secondAttacker.opponent.sprite,
-          currentHP: Math.max(0, secondAttacker.opponent.currentHP),
-          maxHP: secondAttacker.opponent.maxHP,
-          attack: secondAttacker.opponent.attack,
-          defense: secondAttacker.opponent.defense,
-          speed: secondAttacker.opponent.speed
-        },
-        damage: damage,
-        timestamp: Date.now()
-      });
-
-      if (secondAttacker.opponent.currentHP <= 0) {
-        secondAttacker.opponent.fainted = true;
-        secondAttacker.opponent.currentHP = 0;
-        
-        battleLog.push({
-          type: 'faint',
-          message: `¡${secondAttacker.opponent.name} ha sido debilitado!`,
-          pokemon: secondAttacker.opponent.name,
-          timestamp: Date.now()
-        });
-
-        // Siguiente Pokémon
-        if (secondAttacker.isTeam1) {
-          currentPokemon2Index++;
-          if (currentPokemon2Index < pokemon2.length) {
-            battleLog.push({
-              type: 'switch',
-              message: `${battle.opponent_name} envía a ${pokemon2[currentPokemon2Index].name}!`,
-              pokemon: pokemon2[currentPokemon2Index].name,
-              timestamp: Date.now()
-            });
-          }
-        } else {
-          currentPokemon1Index++;
-          if (currentPokemon1Index < pokemon1.length) {
-            battleLog.push({
-              type: 'switch',
-              message: `${battle.challenger_name} envía a ${pokemon1[currentPokemon1Index].name}!`,
-              pokemon: pokemon1[currentPokemon1Index].name,
-              timestamp: Date.now()
-            });
-          }
+    const secondFainted = performAttack(second.attacker, second.defender, second.isTeam1);
+    if (secondFainted) {
+      if (second.isTeam1) {
+        team2Index += 1;
+        if (team2Index < team2Pokemon.length) {
+          battleLog.push({
+            type: 'switch',
+            turn: turnNumber,
+            message: `${battle.opponent_name} envia a ${team2Pokemon[team2Index].name}`,
+            pokemon: team2Pokemon[team2Index].name,
+            timestamp: Date.now()
+          });
+        }
+      } else {
+        team1Index += 1;
+        if (team1Index < team1Pokemon.length) {
+          battleLog.push({
+            type: 'switch',
+            turn: turnNumber,
+            message: `${battle.challenger_name} envia a ${team1Pokemon[team1Index].name}`,
+            pokemon: team1Pokemon[team1Index].name,
+            timestamp: Date.now()
+          });
         }
       }
     }
   }
 
-  // Determinar ganador
-  const team1Alive = pokemon1.filter(p => !p.fainted).length;
-  const team2Alive = pokemon2.filter(p => !p.fainted).length;
-  
-  const winnerId = team1Alive > team2Alive ? battle.challenger_id : battle.opponent_id;
-  const winnerName = team1Alive > team2Alive ? battle.challenger_name : battle.opponent_name;
+  const winner = determineWinnerFromState(battle, team1Pokemon, team2Pokemon, team1TotalDamage, team2TotalDamage);
 
   battleLog.push({
     type: 'end',
-    message: `🏆 ¡${winnerName} gana la batalla!`,
-    winner: winnerName,
+    message: `${winner.winnerName} gana la batalla`,
+    winner: winner.winnerName,
+    loser: winner.loserName,
+    reason: winner.reason,
     timestamp: Date.now()
   });
 
-  // Crear registro de batalla
   const battleResult = {
-    winner_id: winnerId,
-    winner_name: winnerName,
+    winner_id: winner.winnerId,
+    winner_name: winner.winnerName,
+    loser_id: winner.loserId,
+    loser_name: winner.loserName,
+    win_reason: winner.reason,
     turns: turnNumber,
-    team1_pokemon: team1Pokemon.map(p => p.name),
-    team2_pokemon: team2Pokemon.map(p => p.name),
-    team1_remaining: team1Alive,
-    team2_remaining: team2Alive,
+    team1_name: battle.challenger_name,
+    team2_name: battle.opponent_name,
+    team1_pokemon: team1Pokemon.map((p) => p.name),
+    team2_pokemon: team2Pokemon.map((p) => p.name),
+    team1_remaining: team1Pokemon.filter((p) => !p.fainted).length,
+    team2_remaining: team2Pokemon.filter((p) => !p.fainted).length,
+    team1_remaining_hp: team1Pokemon.reduce((sum, p) => sum + Math.max(0, p.currentHP), 0),
+    team2_remaining_hp: team2Pokemon.reduce((sum, p) => sum + Math.max(0, p.currentHP), 0),
+    team1_damage_done: team1TotalDamage,
+    team2_damage_done: team2TotalDamage,
     battle_log: battleLog,
-    detailed_turns: turns
+    detailed_turns: turns,
+    pokemon_summary: {
+      challenger: team1Pokemon.map((p) => ({
+        name: p.name,
+        fainted: p.fainted,
+        remaining_hp: p.currentHP,
+        max_hp: p.maxHP,
+        damage_done: p.totalDamageDone,
+        damage_taken: p.totalDamageTaken,
+        knocks: p.knocks
+      })),
+      opponent: team2Pokemon.map((p) => ({
+        name: p.name,
+        fainted: p.fainted,
+        remaining_hp: p.currentHP,
+        max_hp: p.maxHP,
+        damage_done: p.totalDamageDone,
+        damage_taken: p.totalDamageTaken,
+        knocks: p.knocks
+      }))
+    }
   };
 
-  // Finalizar batalla
-  const result = await finalizeBattle(battleId, winnerId, battleResult);
-
+  const result = await finalizeBattle(battleId, winner.winnerId, battleResult);
   return {
     ...result,
     battle_result: battleResult
   };
-}
-
-// Calcular daño basado en fórmula similar a Pokémon
-function calculateDamage(attacker, defender) {
-  // Fórmula simplificada de daño de Pokémon
-  const level = 50;
-  const power = 60 + Math.random() * 40; // Poder del movimiento (60-100)
-  const attack = attacker.attack;
-  const defense = defender.defense;
-  
-  // Modificador de tipo (simplificado, asumimos neutral)
-  const typeEffectiveness = 1.0;
-  
-  // Crítico (6.25% de probabilidad)
-  const critical = Math.random() < 0.0625 ? 1.5 : 1.0;
-  
-  // Variación aleatoria (0.85 - 1.0)
-  const random = 0.85 + Math.random() * 0.15;
-  
-  // Fórmula de daño
-  const damage = Math.floor(
-    ((((2 * level / 5 + 2) * power * attack / defense) / 50) + 2) *
-    typeEffectiveness * critical * random
-  );
-  
-  return Math.max(1, damage);
 }
 
 module.exports = {
