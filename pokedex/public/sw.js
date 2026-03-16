@@ -1,7 +1,7 @@
 // Service Worker - Pokedex PWA
-const CACHE_NAME = 'pokedex-v16';
-const CACHE_DYNAMIC_NAME = 'pokedex-dynamic-v16';
-const CACHE_IMAGES_NAME = 'pokedex-images-v16';
+const CACHE_NAME = 'pokedex-v17';
+const CACHE_DYNAMIC_NAME = 'pokedex-dynamic-v17';
+const CACHE_IMAGES_NAME = 'pokedex-images-v17';
 
 // APP SHELL - Solo archivos que existen después del build
 const APP_SHELL = [
