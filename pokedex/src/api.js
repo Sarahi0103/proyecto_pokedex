@@ -58,7 +58,10 @@ export async function api(path, opts = {}){
     
     // Si falla por otros motivos (400, 404, 500, etc.), lanzar error con el mensaje
     const errorData = await res.json().catch(() => ({ error: 'Error en el servidor' }));
-    throw new Error(errorData.error || `Error ${res.status}`);
+    const apiError = new Error(errorData.error || `Error ${res.status}`);
+    apiError.status = res.status;
+    apiError.details = errorData;
+    throw apiError;
     
   } catch (error) {
     // Si es un error de autenticación, no guardar offline

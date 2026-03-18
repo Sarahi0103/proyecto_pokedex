@@ -953,15 +953,15 @@ async function sendChallenge() {
 
     if (response?.action === 'incoming_pending' && response?.battle?.id) {
       highlightedIncomingChallengeId.value = response.battle.id
-      await hydrateChallengeFromBattleId(response.battle.id)
+      hydrateChallengeFromBattleId(response.battle.id).catch(() => {})
     }
 
     if (response?.action === 'pending_already_sent' && response?.battle?.id) {
-      await hydrateChallengeFromBattleId(response.battle.id)
+      hydrateChallengeFromBattleId(response.battle.id).catch(() => {})
     }
 
     if (response?.action === 'incoming_pending') {
-      await loadChallenges()
+      loadChallenges().catch(() => {})
       showNotification('⚔️ Desafío pendiente detectado', response?.message || 'Ya tienes un desafío recibido. Debes aceptarlo o rechazarlo primero.')
       return
     }
@@ -970,7 +970,7 @@ async function sendChallenge() {
     showNotification('⚔️ Estado del desafío', challengeMessage)
     selectedTeam.value = null
     selectedFriend.value = null
-    await loadChallenges()
+    loadChallenges().catch(() => {})
   } catch (e) {
     console.error('❌ Error enviando desafío:', e)
     showNotification('❌ Error', e.message || 'No se pudo enviar el desafío')

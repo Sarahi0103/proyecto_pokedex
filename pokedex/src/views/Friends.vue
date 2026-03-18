@@ -102,37 +102,38 @@ async function loadFriends(){
 
 async function addFriend(){
   validationErrors.value = []
+  const normalizedCode = friendCode.value.trim()
   
-  if(!friendCode.value.trim()){
+  if(!normalizedCode){
     showWarning('Por favor ingresa un código')
     return
   }
   
   // Validate friend code format
-  const isValidCode = validateCode(friendCode.value.trim())
+  const isValidCode = validateCode(normalizedCode)
   if(!isValidCode){
     validationErrors.value = [{field: 'friendCode', message: 'Código inválido (6-9 caracteres alfanuméricos)'}]
     return
   }
   
-  if(friendCode.value.trim().toUpperCase() === myCode.value.toUpperCase()){
+  if(normalizedCode.toUpperCase() === myCode.value.toUpperCase()){
     showWarning('No puedes agregarte a ti mismo')
     return
   }
   
-  console.log('🔍 Intentando agregar amigo con código:', friendCode.value.trim())
+  console.log('🔍 Intentando agregar amigo con código:', normalizedCode)
   
   const result = await request(
     async () => {
       const result = await api('/api/friends/add', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ code: friendCode.value.trim() })
+        body: JSON.stringify({ code: normalizedCode })
       })
       return result
     },
     {
-      retries: 2,
+      retries: 0,
       onRetry: (attempt, total, time) => {
         showWarning(`Reintentando... (${attempt}/${total})`)
       }
@@ -160,14 +161,24 @@ async function addFriend(){
       success('✓ Solicitud enviada. Recarga la página para ver los cambios.')
     }
   } else if (networkError.value) {
-    if (networkError.value.includes('No autorizado') || networkError.value.includes('Unauthorized')) {
+    const msg = networkError.value.toLowerCase()
+
+    if (msg.includes('no autorizado') || msg.includes('unauthorized') || msg.includes('invalid token')) {
       showError('⚠️ Sesión expirada. Redirigiendo al login...')
       setTimeout(() => {
         localStorage.clear()
         router.push('/login')
       }, 2000)
-    } else {
+    } else if (msg.includes('demasiado') || msg.includes('too many') || msg.includes('rate limit') || msg.includes('429')) {
+      showWarning('Estás enviando solicitudes muy rápido. Espera un minuto e inténtalo de nuevo.')
+    } else if (msg.includes('cannot add yourself') || msg.includes('cannot add')) {
+      showWarning('No puedes agregarte a ti mismo.')
+    } else if (msg.includes('code required')) {
+      showWarning('Debes ingresar un código de amigo.')
+    } else if (msg.includes('no user with that code') || msg.includes('not found')) {
       showError('✗ No se encontró usuario con ese código')
+    } else {
+      showError(`✗ No se pudo enviar la solicitud: ${networkError.value}`)
     }
   }
 }
