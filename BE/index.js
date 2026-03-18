@@ -34,6 +34,7 @@ const {
   savePushSubscription,
   getPushSubscriptions,
   removePushSubscription,
+  removePushSubscriptionsInBulk,
   // Batallas
   createBattleChallenge,
   getPendingChallenges,
@@ -572,14 +573,10 @@ async function sendPushToUser(userId, payload, contextLabel) {
     const result = await sendPushNotification(subs, payload);
 
     if (result.invalidEndpoints?.length) {
-      console.log(`🧹 ${contextLabel}: eliminando ${result.invalidEndpoints.length} suscripción(es) inválida(s)`);
-      await Promise.all(
-        result.invalidEndpoints.map(endpoint =>
-          removePushSubscription(userId, endpoint).catch(error => {
-            console.error(`❌ ${contextLabel}: error eliminando endpoint inválido`, error.message);
-          })
-        )
-      );
+      console.log(`🧹 ${contextLabel}: eliminando ${result.invalidEndpoints.length} suscripción(es) inválida(s) en bulk`);
+      removePushSubscriptionsInBulk(userId, result.invalidEndpoints).catch(error => {
+        console.error(`❌ ${contextLabel}: error eliminando endpoints inválidos`, error.message);
+      });
     }
 
     return result;
@@ -868,16 +865,19 @@ app.post('/api/friends/add', authMiddleware, apiFriendsLimiter, async (req,res)=
       console.log('⚠️  Advertencia: No se encontró la solicitud después de insertarla');
     }
     
-    // Enviar push notification al amigo
+    // Enviar push notification al amigo (fire-and-forget para respuesta rápida)
     console.log('📤 Enviando push notification de amistad...');
     const friendRequestPayload = createFriendRequestPayload(user.name);
-    const friendPushResult = await sendPushToUser(friend.id, friendRequestPayload, 'Friend request');
-    if (friendPushResult.success) {
-      console.log('✅ Push notification enviada correctamente');
-    } else {
-      console.log('⚠️  No se pudo enviar la notificación:', friendPushResult);
-    }
-    
+    sendPushToUser(friend.id, friendRequestPayload, 'Friend request')
+      .then(result => {
+        if (result.success) {
+          console.log('✅ Push notification enviada correctamente');
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error enviando push de amistad:', error.message);
+      });
+
     const friends = await getFriends(user.id);
     console.log('👥 Total amigos:', friends.length);
     res.json({ friends });
@@ -945,15 +945,18 @@ app.post('/api/friends/accept', authMiddleware, async (req, res) => {
     const user = await getUserByEmail(req.user.email);
     await acceptFriendRequest(user.id, friendId);
     
-    // Enviar notificación push al usuario que envió la solicitud
+    // Enviar notificación push al usuario que envió la solicitud (fire-and-forget para respuesta rápida)
     console.log('📤 Enviando push notification de aceptación...');
     const friendAcceptedPayload = createFriendAcceptedPayload(user.name);
-    const friendAcceptedResult = await sendPushToUser(friendId, friendAcceptedPayload, 'Friend accepted');
-    if (friendAcceptedResult.success) {
-      console.log('✅ Push notification de aceptación enviada');
-    } else {
-      console.log('⚠️  No se pudo enviar la notificación:', friendAcceptedResult);
-    }
+    sendPushToUser(friendId, friendAcceptedPayload, 'Friend accepted')
+      .then(result => {
+        if (result.success) {
+          console.log('✅ Push notification de aceptación enviada');
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error enviando push de aceptación:', error.message);
+      });
 
     const friends = await getFriends(user.id);
     res.json({ friends });
@@ -1108,6 +1111,9 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
             if (result.success) {
               console.log('✅ Push notification reenviada para desafío pendiente');
             }
+          })
+          .catch(error => {
+            console.error('❌ Error reenviando push de batalla:', error.message);
           });
 
         return res.status(200).json({
@@ -1145,6 +1151,9 @@ app.post('/api/battles/challenge', authMiddleware, async (req, res) => {
         if (result.success) {
           console.log('✅ Push notification de batalla enviada correctamente');
         }
+      })
+      .catch(error => {
+        console.error('❌ Error enviando push de batalla:', error.message);
       });
     
     res.json({ battle: normalizedCreatedBattle, message: 'Challenge sent!' });
@@ -1259,6 +1268,9 @@ app.post('/api/battles/:battleId/accept', authMiddleware, async (req, res) => {
         if (result.success) {
           console.log('✅ Push notification de batalla aceptada enviada correctamente');
         }
+      })
+      .catch(error => {
+        console.error('❌ Error enviando push de batalla aceptada:', error.message);
       });
     
     res.json({
@@ -1444,6 +1456,8 @@ app.post('/api/battles/:battleId/execute', authMiddleware, async (req, res) => {
       if (pushResult.success) {
         console.log('✅ Push notification de victoria enviada correctamente');
       }
+    }).catch(error => {
+      console.error('❌ Error enviando push de victoria:', error.message);
     });
 
     sendPushToUser(
@@ -1454,6 +1468,8 @@ app.post('/api/battles/:battleId/execute', authMiddleware, async (req, res) => {
       if (pushResult.success) {
         console.log('✅ Push notification de derrota enviada correctamente');
       }
+    }).catch(error => {
+      console.error('❌ Error enviando push de derrota:', error.message);
     });
     
     res.json({ 

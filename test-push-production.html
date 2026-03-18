@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Push Notifications - Producción</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #e51a1a;
+      margin: 0 0 20px 0;
+    }
+    .step {
+      background: #f9f9f9;
+      padding: 15px;
+      margin: 15px 0;
+      border-left: 4px solid #e51a1a;
+      border-radius: 5px;
+    }
+    .step h3 {
+      margin: 0 0 10px 0;
+      color: #333;
+    }
+    button {
+      background: #e51a1a;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #c01515;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin: 15px 0;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: 'Courier New', monospace;
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    .warning {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+    input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      width: 100%;
+      margin: 5px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔔 Test Push Notifications - Producción</h1>
+    <p>Verifica que el sistema de notificaciones push funcione correctamente en Render</p>
+
+    <div class="step">
+      <h3>Paso 1: Configuración</h3>
+      <input type="email" id="email" placeholder="Tu email (ej: laura@gmail.com)" value="laura@gmail.com">
+      <input type="password" id="password" placeholder="Tu contraseña">
+      <div id="configResult"></div>
+    </div>
+
+    <div class="step">
+      <h3>Paso 2: Verificar Backend</h3>
+      <button onclick="checkBackend()">Verificar Endpoints</button>
+      <div id="backendResult"></div>
+    </div>
+
+    <div class="step">
+      <h3>Paso 3: Permisos de Notificaciones</h3>
+      <button onclick="requestPermission()">Solicitar Permiso</button>
+      <div id="permissionResult"></div>
+    </div>
+
+    <div class="step">
+      <h3>Paso 4: Suscribirse a Push</h3>
+      <button onclick="subscribeToPush()" id="subscribeBtn" disabled>Suscribirse</button>
+      <div id="subscribeResult"></div>
+    </div>
+
+    <div class="step">
+      <h3>Paso 5: Enviar Test</h3>
+      <button onclick="sendTestNotification()" id="testBtn" disabled>Enviar Notificación de Prueba</button>
+      <div id="testResult"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'https://pokedex-backend-rzjl.onrender.com';
+    let token = null;
+    let registration = null;
+
+    async function checkBackend() {
+      const resultDiv = document.getElementById('backendResult');
+      resultDiv.innerHTML = '<div class="result info">Verificando backend...</div>';
+
+      try {
+        // 1. Verificar VAPID endpoint
+        const vapidRes = await fetch(`${API_URL}/api/push/vapid-public-key`);
+        const vapidOk = vapidRes.ok;
+
+        // 2. Login
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const loginRes = await fetch(`${API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const loginData = await loginRes.json();
+        token = loginData.token;
+
+        // 3. Verificar subscribe endpoint
+        const subRes = await fetch(`${API_URL}/api/push/subscribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ subscription: { endpoint: 'test', keys: { p256dh: 'test', auth: 'test' } } })
+        });
+        const subOk = subRes.status !== 404;
+
+        // 4. Verificar estado del sistema
+        const statusRes = await fetch(`${API_URL}/api/push/verify`);
+        const statusData = await statusRes.json();
+
+        let html = '';
+        html += vapidOk ? '✅ Endpoint VAPID: OK\n' : '❌ Endpoint VAPID: NO DISPONIBLE\n';
+        html += token ? '✅ Login: OK\n' : '❌ Login: FALLIDO\n';
+        html += subOk ? '✅ Endpoint Subscribe: OK\n' : '❌ Endpoint Subscribe: 404 NOT FOUND\n';
+        html += statusData.vapid?.configured ? '✅ VAPID Keys: CONFIGURADAS\n' : '❌ VAPID Keys: NO CONFIGURADAS\n';
+        html += statusData.push_subscriptions_table_exists ? '✅ Tabla push_subscriptions: EXISTE\n' : '❌ Tabla push_subscriptions: NO EXISTE\n';
+        html += `📊 Suscripciones totales: ${statusData.total_subscriptions}\n`;
+
+        const allOk = vapidOk && token && subOk && statusData.vapid?.configured && statusData.push_subscriptions_table_exists;
+
+        if (allOk) {
+          resultDiv.innerHTML = `<div class="result success">${html}\n✅ BACKEND COMPLETAMENTE FUNCIONAL</div>`;
+          document.getElementById('subscribeBtn').disabled = false;
+        } else {
+          if (!subOk) {
+            html += '\n❌ RENDER NO SE HA REDESPLIEGADO\n';
+            html += '   Ve a https://dashboard.render.com y verifica que el servicio esté "Live"';
+          }
+          if (!statusData.vapid?.configured) {
+            html += '\n❌ VARIABLES VAPID NO CONFIGURADAS\n';
+            html += '   Ve a Dashboard → Environment → Agrega las variables VAPID';
+          }
+          resultDiv.innerHTML = `<div class="result error">${html}</div>`;
+        }
+
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+      }
+    }
+
+    async function requestPermission() {
+      const resultDiv = document.getElementById('permissionResult');
+      
+      if (!('Notification' in window)) {
+        resultDiv.innerHTML = '<div class="result error">❌ Este navegador no soporta notificaciones</div>';
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        resultDiv.innerHTML = '<div class="result success">✅ Permiso ya concedido</div>';
+        document.getElementById('subscribeBtn').disabled = false;
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        resultDiv.innerHTML = '<div class="result success">✅ Permiso concedido correctamente</div>';
+        document.getElementById('subscribeBtn').disabled = false;
+      } else {
+        resultDiv.innerHTML = '<div class="result error">❌ Permiso denegado. No podrás recibir notificaciones.</div>';
+      }
+    }
+
+    async function subscribeToPush() {
+      const resultDiv = document.getElementById('subscribeResult');
+      resultDiv.innerHTML = '<div class="result info">Suscribiendo...</div>';
+
+      try {
+        // Registrar Service Worker
+        registration = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        
+        // Obtener VAPID key
+        const vapidRes = await fetch(`${API_URL}/api/push/vapid-public-key`);
+        const { publicKey } = await vapidRes.json();
+
+        // Suscribirse
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: publicKey
+        });
+
+        // Enviar al servidor
+        const subRes = await fetch(`${API_URL}/api/push/subscribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ subscription })
+        });
+
+        if (subRes.ok) {
+          resultDiv.innerHTML = '<div class="result success">✅ Suscripción exitosa!\n\nAhora puedes recibir notificaciones push.</div>';
+          document.getElementById('testBtn').disabled = false;
+        } else {
+          const errorData = await subRes.json();
+          resultDiv.innerHTML = `<div class="result error">❌ Error al suscribirse: ${errorData.error}</div>`;
+        }
+
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+      }
+    }
+
+    async function sendTestNotification() {
+      const resultDiv = document.getElementById('testResult');
+      resultDiv.innerHTML = '<div class="result info">Enviando notificación de prueba...</div>';
+
+      try {
+        const res = await fetch(`${API_URL}/api/push/test`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          resultDiv.innerHTML = '<div class="result success">✅ Notificación enviada!\n\nDeberías verla en tu dispositivo en unos segundos.</div>';
+        } else {
+          resultDiv.innerHTML = `<div class="result warning">⚠️ ${data.message}\n\n${JSON.stringify(data, null, 2)}</div>`;
+        }
+
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+      }
+    }
+
+    // Auto-check al cargar
+    window.addEventListener('load', () => {
+      if (Notification.permission === 'granted') {
+        document.getElementById('permissionResult').innerHTML = '<div class="result success">✅ Permiso ya concedido</div>';
+      } else if (Notification.permission === 'denied') {
+        document.getElementById('permissionResult').innerHTML = '<div class="result error">❌ Permiso denegado previamente</div>';
+      } else {
+        document.getElementById('permissionResult').innerHTML = '<div class="result info">⏸️ Permiso no solicitado aún</div>';
+      }
+    });
+  </script>
+</body>
+</html>

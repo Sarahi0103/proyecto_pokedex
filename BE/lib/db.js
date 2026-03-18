@@ -503,9 +503,35 @@ async function removePushSubscription(userId, endpoint) {
   } catch (error) {
     // Si la tabla no existe, no hacer nada
     if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
-      console.log('ÔÜá´©Å  Tabla push_subscriptions no existe');
+      console.log('⚠️  Tabla push_subscriptions no existe');
       return false;
     }
+    throw error;
+  }
+}
+
+async function removePushSubscriptionsInBulk(userId, endpoints) {
+  try {
+    if (!endpoints || endpoints.length === 0) {
+      return true;
+    }
+
+    console.log(`🧹 Eliminando ${endpoints.length} suscripción(es) inválida(s) para usuario ${userId}`);
+
+    await pool.query(
+      'DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = ANY($2::text[])',
+      [userId, endpoints]
+    );
+
+    console.log(`✅ ${endpoints.length} suscripción(es) eliminada(s)`);
+    return true;
+  } catch (error) {
+    // Si la tabla no existe, no hacer nada
+    if (error.message.includes('relation "push_subscriptions"') || error.message.includes('does not exist')) {
+      console.log('⚠️  Tabla push_subscriptions no existe');
+      return false;
+    }
+    console.error('❌ Error eliminando suscripciones en bulk:', error.message);
     throw error;
   }
 }
@@ -1136,6 +1162,7 @@ module.exports = {
   savePushSubscription,
   getPushSubscriptions,
   removePushSubscription,
+  removePushSubscriptionsInBulk,
   // Batallas
   createBattleChallenge,
   getPendingChallenges,
