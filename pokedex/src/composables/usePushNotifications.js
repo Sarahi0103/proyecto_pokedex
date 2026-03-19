@@ -261,10 +261,22 @@ export function usePushNotifications() {
         return false;
       }
       
-      // Verificar si ya está suscrito
+      // Si ya tenemos estado suscrito local, asegurarnos de que también
+      // quede sincronizado en backend para el usuario autenticado actual.
       if (isSubscribed.value) {
-        console.log('📱 Ya está suscrito, no es necesario suscribirse nuevamente');
-        return true;
+        console.log('📱 Suscripción local detectada, validando sincronización con backend...');
+        const registration = await getServiceWorkerRegistration();
+        const existingSubscription = await registration.pushManager.getSubscription();
+
+        if (existingSubscription) {
+          await syncSubscriptionWithServer(existingSubscription);
+          console.log('✅ Suscripción local sincronizada con backend');
+          return true;
+        }
+
+        // Si el estado local estaba desfasado pero ya no existe suscripción real,
+        // continuar con el flujo normal para recrearla.
+        isSubscribed.value = false;
       }
 
       // Verificar soporte
