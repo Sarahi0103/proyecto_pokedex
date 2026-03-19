@@ -10,6 +10,22 @@ function createNotificationTag(prefix, value) {
   return `${prefix}-${normalizedValue || 'default'}`;
 }
 
+function buildSafeTopic(payload) {
+  const rawTopic = payload?.topic;
+  if (!rawTopic) {
+    return undefined;
+  }
+
+  const normalizedTopic = String(rawTopic)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+
+  return normalizedTopic || undefined;
+}
+
 // Configurar VAPID keys
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
@@ -50,9 +66,15 @@ async function sendPushNotification(userSubs, payload) {
   const payloadString = JSON.stringify(payload);
   const deliveryOptions = {
     TTL: payload.ttl || 60,
-    urgency: payload.urgency || 'high',
-    topic: payload.tag || payload.data?.type || undefined
+    urgency: payload.urgency || 'high'
   };
+
+  const topic = buildSafeTopic(payload);
+
+  if (topic) {
+    deliveryOptions.topic = topic;
+  }
+
   const results = [];
   const invalidEndpoints = [];
   
@@ -63,6 +85,23 @@ async function sendPushNotification(userSubs, payload) {
       results.push({ success: true, endpoint: subscription.endpoint });
       console.log(`✅ Push notification enviada exitosamente`);
     } catch (error) {
+      const shouldRetryWithoutHeaders =
+        error?.statusCode === 400 ||
+        error?.statusCode === 413 ||
+        error?.statusCode === 429;
+
+      if (shouldRetryWithoutHeaders) {
+        try {
+          console.warn('⚠️ Reintentando push sin headers opcionales (compatibilidad proveedor)');
+          await webpush.sendNotification(subscription, payloadString);
+          results.push({ success: true, endpoint: subscription.endpoint, retried: true });
+          console.log('✅ Push notification enviada exitosamente en reintento');
+          continue;
+        } catch (retryError) {
+          error = retryError;
+        }
+      }
+
       console.error(`❌ Error enviando push:`, error.message);
       console.error(`   Status Code:`, error.statusCode);
       console.error(`   Body:`, error.body);

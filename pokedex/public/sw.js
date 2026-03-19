@@ -463,3 +463,22 @@ self.addEventListener('notificationclose', event => {
   }
 });
 
+// PUSH SUBSCRIPTION CHANGE - Notificar al cliente para resincronizar
+self.addEventListener('pushsubscriptionchange', event => {
+  console.log('[SW] 🔄 pushsubscriptionchange detectado');
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(clientList => {
+        clientList.forEach(client => {
+          client.postMessage({
+            type: 'PUSH_SUBSCRIPTION_EXPIRED'
+          });
+        });
+      })
+      .catch(error => {
+        console.error('[SW] Error notificando cambio de suscripción:', error);
+      })
+  );
+});
+

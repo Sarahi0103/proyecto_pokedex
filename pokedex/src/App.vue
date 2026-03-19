@@ -71,6 +71,13 @@ onMounted(() => {
         console.log('📱 Navegando desde notificación push:', url)
         router.push(url)
       }
+
+      if (event.data && event.data.type === 'PUSH_SUBSCRIPTION_EXPIRED') {
+        console.log('🔄 Suscripción push expirada/cambiada, resincronizando...')
+        autoSubscribe().catch(err => {
+          console.error('❌ Error resincronizando suscripción push:', err)
+        })
+      }
     })
   }
 })
