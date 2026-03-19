@@ -272,13 +272,13 @@ onMounted(() => {
         const notifType = event.data?.notificationType
         console.log('🔔 Nueva notificación push recibida:', notifType)
         
-        if (notifType === 'friend-request' || notifType === 'friend_request') {
+        if (notifType === 'friend-request') {
           console.log('👥 ¡Nueva solicitud de amistad!')
           console.log('🔄 Actualizando lista automáticamente...')
           loadFriends()
         }
 
-        if (notifType === 'friend-accepted' || notifType === 'friend_accepted') {
+        if (notifType === 'friend-accepted') {
           console.log('✅ Solicitud de amistad aceptada')
           console.log('🔄 Actualizando lista automáticamente...')
           loadFriends()
@@ -290,13 +290,13 @@ onMounted(() => {
         const notifType = event.data?.data?.type
         console.log('🖱️ Click en notificación:', notifType)
         
-        if (notifType === 'friend-request' || notifType === 'friend_request') {
+        if (notifType === 'friend-request') {
           console.log('👥 Abriendo solicitudes de amistad')
           console.log('🔄 Actualizando lista...')
           loadFriends()
         }
 
-        if (notifType === 'friend-accepted' || notifType === 'friend_accepted') {
+        if (notifType === 'friend-accepted') {
           console.log('✅ Abriendo actualización de amistad aceptada')
           console.log('🔄 Actualizando lista...')
           loadFriends()

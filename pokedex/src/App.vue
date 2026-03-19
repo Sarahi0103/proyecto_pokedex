@@ -8,6 +8,7 @@ import NotificationCenter from './components/NotificationCenter.vue'
 import { useAnalytics } from './composables/useAnalytics'
 import { usePerformance } from './composables/usePerformance'
 import { usePushNotifications } from './composables/usePushNotifications'
+import { useOfflineStatus } from './composables/useOfflineStatus'
 import './styles.css'
 
 const router = useRouter()
@@ -15,6 +16,7 @@ const route = useRoute()
 const { setupAutoTracking } = useAnalytics()
 const { monitorWebVitals } = usePerformance()
 const { autoSubscribe, subscribe, isSubscribed } = usePushNotifications()
+const { isOnline, pendingRequests } = useOfflineStatus()
 
 // Banner de notificaciones
 const showPushBanner = ref(false)
@@ -38,6 +40,16 @@ onMounted(() => {
   
   // Monitorear Web Vitals
   monitorWebVitals()
+  
+  // Ajustar altura de los banners
+  const updateBannerHeight = () => {
+    let offset = 0
+    if (!isOnline.value) offset += 48
+    if (showPushBanner.value) offset += 60
+    document.documentElement.style.setProperty('--banner-top-offset', offset + 'px')
+  }
+  
+  watch([isOnline, showPushBanner], updateBannerHeight, { immediate: true })
   
   // Auto-suscribirse a notificaciones push si el usuario está autenticado
   if (user.value) {
@@ -139,6 +151,13 @@ function isActive(path){
 
 <template>
   <div class="app-shell">
+    <!-- Banner de conexión offline -->
+    <div v-if="!isOnline" class="offline-banner">
+      <span class="offline-icon">🔴</span>
+      <span class="offline-text">Sin conexión a internet</span>
+      <span v-if="pendingRequests > 0" class="pending-badge">{{ pendingRequests }} pendientes</span>
+    </div>
+    
     <!-- Banner de notificaciones push -->
     <div v-if="showPushBanner && user" class="push-notification-banner">
       <div class="push-banner-content">
@@ -232,6 +251,7 @@ function isActive(path){
   top: 0;
   z-index: 100;
   border-bottom: 4px solid #FFCB05;
+  margin-top: var(--banner-top-offset, 0px);
 }
 
 .header-top{
@@ -580,6 +600,52 @@ function isActive(path){
   }
 }
 
+/* Banner de conexión offline */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #EF5350 0%, #C62828 100%);
+  border-bottom: 4px solid #B71C1C;
+  padding: 12px 20px;
+  z-index: 9998;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  animation: slideDown 0.4s ease-out;
+}
+
+.offline-icon {
+  font-size: 16px;
+  animation: pulse 1.5s infinite;
+}
+
+.offline-text {
+  flex: 1;
+}
+
+.pending-badge {
+  background: rgba(255,255,255,0.3);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 /* Banner de notificaciones push */
 .push-notification-banner {
   position: fixed;
@@ -589,7 +655,7 @@ function isActive(path){
   background: linear-gradient(135deg, #FFCB05 0%, #FFA500 100%);
   border-bottom: 4px solid #CC0000;
   padding: 16px 20px;
-  z-index: 9999;
+  z-index: 9997;
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   animation: slideDown 0.4s ease-out;
 }

@@ -209,11 +209,11 @@ onMounted(async () => {
       }
 
       const notificationType = event.data?.notificationType || event.data?.data?.type
-
+      
       if (!messageType || !notificationType) {
         return
       }
-
+      
       const isBattlePush = notificationType === 'battle-challenge' || notificationType === 'battle-accepted' || notificationType === 'battle-result'
       if (!isBattlePush) {
         return

@@ -1,4 +1,4 @@
-# ✅ SOLUCIÓN COMPLETA: Notificaciones Push Automáticas
+iones push al env# ✅ SOLUCIÓN COMPLETA: Notificaciones Push Automáticas
 
 ## 🎯 Problema Resuelto:
 ❌ **ANTES**: Notificación no llegaba + había que recargar manualmente la página
